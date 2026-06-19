@@ -5,8 +5,11 @@ import { auth } from "./auth";
 import { env } from "./config/env";
 import { registerSwaggerDocs } from "./docs/swagger";
 import { healthRouter } from "./features/health/routes/health-routes";
+import { profileRouter } from "./features/users/routes/profile-routes";
 import { errorHandler } from "./middleware/error-handler";
 import { notFound } from "./middleware/not-found";
+import { skillGapRouter } from "./features/skill-gap-analysis/routes/skill-gap-routes";
+import { careerGuidanceRouter } from "./features/career-guidance/routes/career-guidance-routes";
 
 const app: Express = express();
 
@@ -26,6 +29,9 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use("/api/health", healthRouter);
+app.use("/api/profile", profileRouter);
+app.use("/api/skill-gap", skillGapRouter);
+app.use("/api/career-guidance", careerGuidanceRouter);
 
 app.use(notFound);
 app.use(errorHandler);

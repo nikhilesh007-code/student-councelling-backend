@@ -15,6 +15,8 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
+  profile       StudentProfile?
+
   sessions      Session[]
   accounts      Account[]
 
@@ -65,4 +67,61 @@ model Verification {
   updatedAt  DateTime @updatedAt
 
   @@map("verifications")
+}
+
+model StudentProfile {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+
+  branch      String
+  year        Int
+  cgpa        Float
+
+  skills      String[]
+  interests   String[]
+
+  careerGoal  String
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("student_profiles")
+}
+model Career {
+  id          String @id @default(cuid())
+  name        String @unique
+  description String?
+
+  skills      CareerSkill[]
+
+  createdAt   DateTime @default(now())
+
+  @@map("careers")
+}
+
+model Skill {
+  id          String @id @default(cuid())
+  name        String @unique
+
+  careers     CareerSkill[]
+
+  createdAt   DateTime @default(now())
+
+  @@map("skills")
+}
+
+model CareerSkill {
+  id          String @id @default(cuid())
+
+  careerId    String
+  skillId     String
+
+  career      Career @relation(fields: [careerId], references: [id], onDelete: Cascade)
+  skill       Skill  @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([careerId, skillId])
+
+  @@map("career_skills")
 }
