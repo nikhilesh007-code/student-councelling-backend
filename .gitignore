@@ -10,3 +10,13 @@ migrations/
 .env.example
 .env.development
 .env.production
+
+# Temporary and Debug
+test_*.ts
+test_*.js
+trace_*.ts
+audit_*.ts
+debug_*.ts
+debug_*.js
+careers*.json
+profile.json

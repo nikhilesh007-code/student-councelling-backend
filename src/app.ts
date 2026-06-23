@@ -10,12 +10,13 @@ import { errorHandler } from "./middleware/error-handler";
 import { notFound } from "./middleware/not-found";
 import { skillGapRouter } from "./features/skill-gap-analysis/routes/skill-gap-routes";
 import { careerGuidanceRouter } from "./features/career-guidance/routes/career-guidance-routes";
-
+import careersRouter from "./features/careers/routes/careers-routes";
+import { chatRouter } from "./features/chat/routes/chat-routes";
 const app: Express = express();
 
 app.use(
 	cors({
-		origin: env.BETTER_AUTH_URL,
+		origin: [env.BETTER_AUTH_URL, env.FRONTEND_URL, "http://localhost:5174"],
 		credentials: true,
 	}),
 );
@@ -32,6 +33,8 @@ app.use("/api/health", healthRouter);
 app.use("/api/profile", profileRouter);
 app.use("/api/skill-gap", skillGapRouter);
 app.use("/api/career-guidance", careerGuidanceRouter);
+app.use("/api/careers", careersRouter);
+app.use("/api/chat", chatRouter);
 
 app.use(notFound);
 app.use(errorHandler);

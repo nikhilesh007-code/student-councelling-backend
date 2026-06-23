@@ -19,6 +19,7 @@ model User {
 
   sessions      Session[]
   accounts      Account[]
+  aiCache       AiCache?
 
   @@map("users")
 }
@@ -73,14 +74,18 @@ model StudentProfile {
   id          String   @id @default(cuid())
   userId      String   @unique
 
-  branch      String
-  year        Int
-  cgpa        Float
+  branch      String?
+  year        Int?
+  cgpa        Float?
 
   skills      String[]
   interests   String[]
 
-  careerGoal  String
+  careerGoal  String?
+  phone       String?
+  bio         String?
+  github      String?
+  linkedin    String?
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -93,6 +98,10 @@ model Career {
   id          String @id @default(cuid())
   name        String @unique
   description String?
+  salaryRange String?
+  roadmap     Json?
+  resources   Json?
+  projects    Json?
 
   skills      CareerSkill[]
 
@@ -124,4 +133,17 @@ model CareerSkill {
   @@unique([careerId, skillId])
 
   @@map("career_skills")
+}
+
+model AiCache {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  recommendation Json?
+  skillGap       Json?
+  profileHash    String
+  generatedAt    DateTime @default(now())
+
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("ai_caches")
 }

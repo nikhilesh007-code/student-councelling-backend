@@ -1,11 +1,14 @@
 import type { Request, Response } from "express";
 import ollama from "ollama";
 import { prisma } from "../../../database";
+import { resolveCareer } from "../../../utils/career-lookup";
+import { generateCareerExplanation } from "../../ai/services/ollama-service";
 
 export async function generateCareerGuidance(
     req: Request,
     res: Response
 ) {
+    const start = Date.now();
     try {
         const { userId } = req.body;
 
@@ -13,6 +16,11 @@ export async function generateCareerGuidance(
             where: {
                 userId,
             },
+            select: {
+                careerGoal: true,
+                skills: true,
+                interests: true
+            }
         });
 
         if (!profile) {
@@ -22,19 +30,10 @@ export async function generateCareerGuidance(
             });
         }
 
-        const career = await prisma.career.findUnique({
-            where: {
-                name: profile.careerGoal,
-            },
-            include: {
-                skills: {
-                    include: {
-                        skill: true,
-                    },
-                },
-            },
-        });
-
+        const career = await resolveCareer(profile.careerGoal, profile.skills);
+        const dbTime = Date.now() - start;
+        console.log(`[RECOMMENDATION] Database query time: ${dbTime}ms`);
+        
         if (!career) {
             return res.status(404).json({
                 success: false,
@@ -48,66 +47,39 @@ export async function generateCareerGuidance(
 
         const studentSkills = profile.skills;
 
-        const matchedSkills = studentSkills.filter(
-            (skill) => requiredSkills.includes(skill)
-        );
+        const { matchSkills } = await import("../../skills/services/skill-similarity-service");
+        const skillMatches = await matchSkills(requiredSkills, studentSkills);
 
-        const missingSkills = requiredSkills.filter(
-            (skill) => !studentSkills.includes(skill)
-        );
+        const matchedSkills = skillMatches.filter(m => m.matchType === 'Exact').map(m => m.requiredSkill);
+        const missingSkills = skillMatches.filter(m => m.matchType === 'Missing').map(m => m.requiredSkill);
 
-        const gapScore = Math.round(
-            (missingSkills.length / requiredSkills.length) * 100
-        );
+        let totalScore = 0;
+        for (const match of skillMatches) {
+            totalScore += match.score;
+        }
 
-        const prompt = `
-You are an expert career counsellor.
+        const matchScore = requiredSkills.length > 0 ? Math.round(totalScore / requiredSkills.length) : 0;
+        const gapScore = 100 - matchScore;
 
-Student Branch: ${profile.branch}
-Student CGPA: ${profile.cgpa}
 
-Career Goal: ${career.name}
-
-Current Skills:
-${studentSkills.join(", ")}
-
-Matched Skills:
-${matchedSkills.join(", ")}
-
-Missing Skills:
-${missingSkills.join(", ")}
-
-Gap Score:
-${gapScore}%
-
-Give:
-
-1. Skill Gap Summary
-2. Learning Roadmap
-3. Recommended Courses
-4. Recommended Projects
-5. Career Advice
-
-Keep it practical and student-friendly.
-`;
-
-        const aiResponse = await ollama.chat({
-            model: "llama3",
-            messages: [
-                {
-                    role: "user",
-                    content: prompt,
-                },
-            ],
-        });
+        let interests: string[] = [];
+        if (typeof profile.interests === 'string') {
+            interests = (profile.interests as string).split(',').map(i => i.trim());
+        } else if (Array.isArray(profile.interests)) {
+            interests = profile.interests;
+        }
 
         res.status(200).json({
             success: true,
+            matchScore,
             career: career.name,
             gapScore,
             matchedSkills,
             missingSkills,
-            guidance: aiResponse.message.content,
+            skillMatches,
+            interests,
+            studentSkills,
+            careerGoal: profile.careerGoal
         });
 
     } catch (error) {
@@ -119,3 +91,67 @@ Keep it practical and student-friendly.
         });
     }
 }
+
+export async function generateCareerGuidanceAi(
+    req: Request,
+    res: Response
+) {
+    try {
+        const { userId, studentSkills, interests, careerGoal, careerName, matchScore, missingSkills, regenerate } = req.body;
+
+        const crypto = require('crypto');
+        const hashPayload = JSON.stringify({ studentSkills, interests, careerGoal, careerName, matchScore, missingSkills });
+        const currentHash = crypto.createHash('md5').update(hashPayload).digest('hex');
+
+        if (!regenerate) {
+            const cache = await prisma.aiCache.findUnique({ where: { userId } });
+            if (cache && cache.profileHash === currentHash && cache.recommendation) {
+                console.log(`[AI CACHE HIT] Recommendation for ${userId}`);
+                return res.status(200).json({
+                    success: true,
+                    ...((cache.recommendation as any) || {})
+                });
+            }
+        }
+
+        console.log(regenerate ? `[AI REGENERATE] Recommendation for ${userId}` : `[AI CACHE MISS] Recommendation for ${userId}`);
+
+        const aiData = await generateCareerExplanation({
+            userSkills: studentSkills,
+            interests,
+            careerGoal,
+            recommendedCareer: careerName,
+            matchPercentage: matchScore,
+            missingSkills
+        });
+
+        const responseData = {
+            aiExplanation: aiData.aiExplanation,
+            nextSteps: aiData.nextSteps,
+        };
+
+        await prisma.aiCache.upsert({
+            where: { userId },
+            create: {
+                userId,
+                profileHash: currentHash,
+                recommendation: responseData
+            },
+            update: {
+                profileHash: currentHash,
+                recommendation: responseData
+            }
+        });
+
+        res.status(200).json({
+            success: true,
+            ...responseData
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({
+            success: false,
+            message: "AI Career guidance failed",
+        });
+    }
+}
