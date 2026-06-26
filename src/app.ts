@@ -4,14 +4,22 @@ import express, { type Express } from "express";
 import { auth } from "./auth";
 import { env } from "./config/env";
 import { registerSwaggerDocs } from "./docs/swagger";
+import { careerGuidanceRouter } from "./features/career-guidance/routes/career-guidance-routes";
+import { chatRouter } from "./features/chat/routes/chat-routes";
 import { healthRouter } from "./features/health/routes/health-routes";
+import { resourcesRoutes } from "./features/learning-resources/routes/resources-routes";
+import { opportunitiesRoutes } from "./features/opportunities/routes/opportunities-routes";
+import { placementRouter } from "./features/placement/placement-routes";
+import { progressRoutes } from "./features/progress/progress-routes";
+import { resumeRouter } from "./features/resume/resume-routes";
+import { roadmapRoutes } from "./features/roadmap/routes/roadmap-routes";
+import { skillGapRouter } from "./features/skill-gap-analysis/routes/skill-gap-routes";
 import { profileRouter } from "./features/users/routes/profile-routes";
+import { attachDebugMetadata } from "./middleware/debug-metadata";
 import { errorHandler } from "./middleware/error-handler";
 import { notFound } from "./middleware/not-found";
-import { skillGapRouter } from "./features/skill-gap-analysis/routes/skill-gap-routes";
-import { careerGuidanceRouter } from "./features/career-guidance/routes/career-guidance-routes";
-import careersRouter from "./features/careers/routes/careers-routes";
-import { chatRouter } from "./features/chat/routes/chat-routes";
+import { aiRouter } from "./features/ai/ai-routes";
+
 const app: Express = express();
 
 app.use(
@@ -29,12 +37,27 @@ app.all("/api/auth/{*any}", toNodeHandler(auth));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+app.use((req, res, next) => {
+	if (!req.originalUrl.includes("/api/auth/get-session")) {
+		console.log(`[API] ${req.method} ${req.originalUrl}`);
+	}
+	next();
+});
+app.use(attachDebugMetadata);
+
 app.use("/api/health", healthRouter);
 app.use("/api/profile", profileRouter);
 app.use("/api/skill-gap", skillGapRouter);
 app.use("/api/career-guidance", careerGuidanceRouter);
-app.use("/api/careers", careersRouter);
+app.use("/api/roadmap", roadmapRoutes);
+app.use("/api/learning-resources", resourcesRoutes);
+app.use("/api/opportunities", opportunitiesRoutes);
+app.use("/api/resume", resumeRouter);
+app.use("/api/placement", placementRouter);
+app.use("/api/progress", progressRoutes);
+
 app.use("/api/chat", chatRouter);
+app.use("/api/ai", aiRouter);
 
 app.use(notFound);
 app.use(errorHandler);

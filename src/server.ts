@@ -1,14 +1,17 @@
 import { app } from "./app";
 import { env } from "./config/env";
 import { prisma } from "./database";
+import { initOllama } from "./features/ai/ai-service";
 
 async function bootstrap() {
 	try {
 		await prisma.$connect();
-		console.log("Database connected");
+		console.log("[DB] PostgreSQL connected successfully");
+		
+		await initOllama();
 
 		app.listen(env.PORT, () => {
-			console.log(`Server running on http://localhost:${env.PORT} [${env.NODE_ENV}]`);
+			console.log(`[SERVER] Backend listening on http://localhost:${env.PORT}`);
 		});
 	} catch (error) {
 		console.error("Failed to start server:", error);

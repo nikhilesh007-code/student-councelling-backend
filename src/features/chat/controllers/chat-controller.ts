@@ -1,109 +1,91 @@
 import type { Request, Response } from "express";
-import ollama from "ollama";
 import { prisma } from "../../../database";
+import { aiService } from "../../ai/ai-service";
+import { careerResolver } from "../../career/career-resolver.service";
 
 export async function handleChat(req: Request, res: Response) {
-    try {
-        const { userId, message } = req.body;
+	try {
+		const { userId, message } = req.body;
 
-        if (!userId || !message) {
-            return res.status(400).json({
-                success: false,
-                message: "Missing userId or message",
-            });
-        }
+		if (!userId || !message) {
+			return res.status(400).json({
+				success: false,
+				message: "Missing userId or message",
+			});
+		}
 
-        const profile = await prisma.studentProfile.findUnique({
-            where: {
-                userId,
-            },
-            select: {
-                branch: true,
-                year: true,
-                skills: true,
-                interests: true,
-                careerGoal: true,
-                bio: true,
-                user: {
-                    select: { name: true }
-                }
-            }
-        });
+		const profile = await prisma.studentProfile.findUnique({
+			where: { userId },
+			include: { user: true },
+		});
 
-        if (!profile) {
-            return res.status(404).json({
-                success: false,
-                message: "Student profile not found",
-            });
-        }
+		if (!profile) {
+			return res.status(404).json({
+				success: false,
+				message: "Student profile not found",
+			});
+		}
 
-        const systemPrompt = `You are CareerAI. Chat concisely with the student. Provide short, helpful answers.
-Profile:
-Name: ${profile.user?.name || 'Unknown'}
-Branch: ${profile.branch || 'Unknown'} Year: ${profile.year || 'Unknown'}
-Skills: ${profile.skills.join(', ')}
-Interests: ${Array.isArray(profile.interests) ? profile.interests.join(', ') : profile.interests}
-Goal: ${profile.careerGoal || 'Undecided'}
-Bio: ${profile.bio || 'None'}
-Only answer career-related questions. Reject generating emails, marketing, or reports.
+		const aiCache = await prisma.aiCache.findUnique({
+			where: { userId },
+		});
 
-Examples:
-User: hi
-Assistant: Hi ${profile.user?.name || 'there'}! How can I help with your career journey today?
+		const { career: targetCareer } = await careerResolver.resolveTargetCareer(userId);
 
-User: what skills do I have?
-Assistant: Based on your profile, your skills are ${profile.skills.join(', ') || 'None listed'}.`;
+		const skillGap = aiCache?.skillGap as any;
+		const missingSkills = skillGap?.[0]?.missingSkills || [];
 
-        const promptLength = systemPrompt.length + message.length;
-        const modelName = "llama3:latest";
+		const systemPrompt = `You are an expert Career Mentor and Technical Guide. 
+Your goal is to answer the user's questions in a friendly, conversational mentor tone. 
 
-        console.log(`[CHAT] Model:`, modelName);
-        console.log(`[CHAT] User:`, userId);
+You MUST answer technical questions (e.g., "What is Java?", "Explain Docker", "What is Machine Learning"). 
+If the user asks about a topic not directly relevant to their career, answer the question first, then explain how relevant it is to their chosen career.
 
-        const messages = [
-            {
-                role: "system",
-                content: systemPrompt,
-            },
-            {
-                role: "user",
-                content: message,
-            }
-        ];
+CRITICAL RULES:
+1. Every technical answer MUST be personalized. After explaining the concept, relate it back to the user's Target Career and Missing Skills.
+2. Recommend learning order. (e.g., "If your goal is ML Engineer, learn Python before Java.")
+3. Explain why a technology matters in the industry.
+4. You can answer questions about programming, AI, machine learning, web dev, cloud, DevOps, databases, interviews, resumes, internships, roadmap, and career planning.
+5. ONLY refuse unrelated topics like politics, entertainment gossip, or unsafe/illegal requests. Do NOT refuse technical programming questions.
 
-        const startTimeMs = performance.now();
+USER RAG CONTEXT:
+- Name: ${profile.user?.name || "Unknown"}
+- Branch/Degree: ${profile.branch || profile.degree || "Unknown"} 
+- Target Career: ${targetCareer}
+- Current Skills: ${profile.skills.length ? profile.skills.join(", ") : "None listed"}
+- Missing Skills to Learn: ${missingSkills.length ? missingSkills.join(", ") : "None identified yet"}
+- Interests: ${Array.isArray(profile.interests) ? profile.interests.join(", ") : profile.interests}
 
-        let timeoutId: NodeJS.Timeout;
-        const timeoutPromise = new Promise<any>((_, reject) => {
-            timeoutId = setTimeout(() => reject(new Error("Timeout")), 30000);
-        });
+Example Tone:
+User: "What is Java?"
+Assistant: "Java is a powerful, object-oriented programming language widely used in enterprise backend systems and Android app development... Since your target career is Data Scientist, Java is not a high priority right now. Instead, you should focus on your missing skills like Python and SQL first!"`;
 
-        const aiResponse = await Promise.race([
-            ollama.chat({
-                model: modelName,
-                messages,
-            }),
-            timeoutPromise
-        ]);
-        clearTimeout(timeoutId!);
 
-        const endTimeMs = performance.now();
-        const generationTime = ((endTimeMs - startTimeMs) / 1000).toFixed(2);
-        const tokenCount = aiResponse.eval_count || 0; 
+		const aiResponse = await aiService.generate(message, {
+			feature: "AI Chat",
+			systemPrompt,
+			responseFormat: "text",
+		});
 
-        console.log(`[CHATBOT] Response Time: ${generationTime} seconds | Tokens: ${tokenCount}`);
+		console.log(
+			`[CHATBOT] Provider: ${aiResponse.provider} | Duration: ${aiResponse.durationMs}ms | Fallback: ${aiResponse.fallbackUsed}`,
+		);
 
-        res.status(200).json({
-            success: true,
-            reply: aiResponse.message.content,
-        });
+		res.status(200).json({
+			success: true,
+			reply: aiResponse.response,
+			_ai: {
+				provider: aiResponse.provider,
+				fallbackUsed: aiResponse.fallbackUsed,
+				durationMs: aiResponse.durationMs,
+			},
+		});
+	} catch (error) {
+		console.error("[CHAT ERROR]", error);
 
-    } catch (error) {
-        console.error("[CHAT ERROR]", error);
-
-        res.status(500).json({
-            success: false,
-            message: "Failed to generate AI response",
-        });
-    }
+		res.status(500).json({
+			success: false,
+			message: "Failed to generate AI response",
+		});
+	}
 }

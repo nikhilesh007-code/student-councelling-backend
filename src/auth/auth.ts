@@ -4,8 +4,6 @@ import { openAPI } from "better-auth/plugins";
 import { env } from "../config/env";
 import { prisma } from "../database";
 
-console.log("GOOGLE_CLIENT_ID:", env.GOOGLE_CLIENT_ID);
-console.log("GOOGLE_CLIENT_SECRET loaded:", !!env.GOOGLE_CLIENT_SECRET);
 
 export const auth = betterAuth({
 	database: prismaAdapter(prisma, {
@@ -15,14 +13,14 @@ export const auth = betterAuth({
 	baseURL: env.BETTER_AUTH_URL,
 	trustedOrigins: [env.BETTER_AUTH_URL, env.FRONTEND_URL, "http://localhost:5174"],
 	emailAndPassword: {
-        enabled: true,
-},
+		enabled: true,
+	},
 
-socialProviders: {
-        google: {
-                clientId: env.GOOGLE_CLIENT_ID,
-                clientSecret: env.GOOGLE_CLIENT_SECRET,
-        },
-},
+	socialProviders: {
+		google: {
+			clientId: env.GOOGLE_CLIENT_ID,
+			clientSecret: env.GOOGLE_CLIENT_SECRET,
+		},
+	},
 	plugins: [openAPI()],
 });

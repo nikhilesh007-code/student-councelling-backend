@@ -11,7 +11,11 @@ const envSchema = z.object({
 	BETTER_AUTH_URL: z.string().url(),
 	FRONTEND_URL: z.string().url().default("http://localhost:5173"),
 	GOOGLE_CLIENT_ID: z.string().min(1),
-    GOOGLE_CLIENT_SECRET: z.string().min(1),
+	GOOGLE_CLIENT_SECRET: z.string().min(1),
+	GEMINI_API_KEY: z.string().min(1).optional(),
+	GROQ_API_KEY: z.string().min(1).optional(),
+	OLLAMA_BASE_URL: z.string().url().default("http://localhost:11434"),
+	OLLAMA_MODEL: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

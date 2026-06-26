@@ -7,19 +7,21 @@ datasource db {
 }
 
 model User {
-  id            String    @id @default(cuid())
+  id            String          @id @default(cuid())
   name          String
-  email         String    @unique
-  emailVerified Boolean   @default(false)
+  email         String          @unique
+  emailVerified Boolean         @default(false)
   image         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  profile       StudentProfile?
-
-  sessions      Session[]
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
   accounts      Account[]
   aiCache       AiCache?
+  sessions        Session[]
+  profile         StudentProfile?
+  roadmapProgress RoadmapProgress[]
+  opportunityBookmarks OpportunityBookmark[]
+  opportunityApplications OpportunityApplication[]
+  resumeAnalysis ResumeAnalysis?
 
   @@map("users")
 }
@@ -33,7 +35,6 @@ model Session {
   userAgent String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("sessions")
@@ -53,7 +54,6 @@ model Account {
   password              String?
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
-
   user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("accounts")
@@ -71,67 +71,74 @@ model Verification {
 }
 
 model StudentProfile {
-  id          String   @id @default(cuid())
-  userId      String   @unique
-
-  branch      String?
-  year        Int?
-  cgpa        Float?
-
-  skills      String[]
-  interests   String[]
-
-  careerGoal  String?
-  phone       String?
-  bio         String?
-  github      String?
-  linkedin    String?
-
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  branch            String?
+  year              Int?
+  cgpa              Float?
+  skills            String[]
+  interests         String[]
+  careerGoal        String?
+  selectedCareer    String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  bio               String?
+  github            String?
+  linkedin          String?
+  phone             String?
+  academicProjects  Json?
+  certifications    Json?
+  companyName       String?
+  currentJobTitle   String?
+  currentSalary     String?
+  desiredRole       String?
+  expectedSalary    String?
+  experienceLevel   String?
+  industry          String?
+  preferredDomains  String[]
+  projects          Json?
+  userType          String   @default("Student")
+  yearsOfExperience Float?
+  leetCode          String?
+  degree            String?
+  semester          String?
+  university        String?
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("student_profiles")
 }
+
 model Career {
-  id          String @id @default(cuid())
-  name        String @unique
+  id          String        @id @default(cuid())
+  name        String        @unique
   description String?
-  salaryRange String?
-  roadmap     Json?
-  resources   Json?
+  createdAt   DateTime      @default(now())
   projects    Json?
-
+  resources   Json?
+  roadmap     Json?
+  salaryRange String?
   skills      CareerSkill[]
-
-  createdAt   DateTime @default(now())
 
   @@map("careers")
 }
 
 model Skill {
-  id          String @id @default(cuid())
-  name        String @unique
-
-  careers     CareerSkill[]
-
-  createdAt   DateTime @default(now())
+  id        String        @id @default(cuid())
+  name      String        @unique
+  createdAt DateTime      @default(now())
+  careers   CareerSkill[]
 
   @@map("skills")
 }
 
 model CareerSkill {
-  id          String @id @default(cuid())
-
-  careerId    String
-  skillId     String
-
-  career      Career @relation(fields: [careerId], references: [id], onDelete: Cascade)
-  skill       Skill  @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  careerId String
+  skillId  String
+  career   Career @relation(fields: [careerId], references: [id], onDelete: Cascade)
+  skill    Skill  @relation(fields: [skillId], references: [id], onDelete: Cascade)
 
   @@unique([careerId, skillId])
-
   @@map("career_skills")
 }
 
@@ -139,11 +146,119 @@ model AiCache {
   id             String   @id @default(cuid())
   userId         String   @unique
   recommendation Json?
+  opportunities  Json?
   skillGap       Json?
+  roadmap        Json?
+  roadmapAnalysis Json?
+  resumeMatch    Json?
+  placement      Json?
+  progress       Json?
   profileHash    String
+  source         String   @default("gemini")
   generatedAt    DateTime @default(now())
-
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("ai_caches")
+}
+
+model RoadmapProgress {
+  id          String   @id @default(cuid())
+  userId      String
+  career      String
+  phaseId     Int
+  status      String   @default("NOT_STARTED") // NOT_STARTED, IN_PROGRESS, COMPLETED
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, career, phaseId])
+  @@map("roadmap_progress")
+}
+
+model Opportunity {
+  id              String   @id @default(cuid())
+  title           String
+  company         String
+  companyLogo     String?
+  location        String
+  workMode        String   // Remote, Hybrid, Onsite
+  type            String   // Internship, Job, Hackathon, Scholarship, Competition
+  duration        String?
+  stipend         String?  // or salary
+  deadline        DateTime?
+  applyUrl        String?
+  requiredSkills  String[]
+  description     String?
+  eligibility     String?
+  source          String   @default("system")
+  postedDate      DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  bookmarks       OpportunityBookmark[]
+  applications    OpportunityApplication[]
+
+  @@map("opportunities")
+}
+
+model OpportunityBookmark {
+  id             String   @id @default(cuid())
+  userId         String
+  opportunityId  String
+  createdAt      DateTime @default(now())
+
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  opportunity    Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, opportunityId])
+  @@map("opportunity_bookmarks")
+}
+
+model OpportunityApplication {
+  id             String   @id @default(cuid())
+  userId         String
+  opportunityId  String
+  status         String   @default("APPLIED")
+  appliedAt      DateTime @default(now())
+
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  opportunity    Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, opportunityId])
+  @@map("opportunity_applications")
+}
+
+model ResumeAnalysis {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  fileUrl      String?
+  fileName     String
+  fileSize     String
+  resumeText   String?
+  parsedData   Json?
+  atsScore     Int
+  overallScore Int
+  careerFit    String?
+  strengths    Json
+  weaknesses   Json
+  matchedSkills Json
+  missingSkills Json
+  missingSections Json
+  improvements Json
+  suggestedProjects Json
+  recommendedCertifications Json
+  summary      String
+  executiveSummary String?
+  keywordSuggestions Json?
+  finalVerdict String?
+  structure    String?
+  writingQuality String?
+  formatting   String?
+  recruiterImpression String?
+  analyzedAt   DateTime @default(now())
+  
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("resume_analysis")
 }
