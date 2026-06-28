@@ -1,6 +1,9 @@
 import { prisma } from "../../../database";
 import { aiService } from "../../ai/ai-service";
 import { careerResolver } from "../../career/career-resolver.service";
+import { getOrInitializeProfile } from "../../users/services/profile-service";
+import { careerContextService } from "../../career/career-context.service";
+import { SkillNormalizer } from "../../../utils/normalizers";
 
 export class RoadmapAnalysisService {
 	async analyzeRoadmap(userId: string) {
@@ -14,10 +17,7 @@ export class RoadmapAnalysisService {
 
 		// JIT Generation: Cache is empty, so we must generate it.
 
-		const profile = await prisma.studentProfile.findUnique({ where: { userId } });
-		if (!profile) {
-			throw new Error("Student profile not found. Please complete your profile first.");
-		}
+		const profile = await getOrInitializeProfile(userId);
 
 		const resumeAnalysis = await prisma.resumeAnalysis.findUnique({ where: { userId } });
 		const { career: targetCareer } = await careerResolver.resolveTargetCareer(userId);
@@ -128,6 +128,112 @@ Return purely JSON matching this exact structure:
 					skills: p.skills || []
 				}))
 			)
+		};
+	}
+
+	async getRoadmap(userId: string) {
+		const rawRoadmap = await this.analyzeRoadmap(userId);
+		
+		// Fetch career context to determine dynamic progress
+		const context = await careerContextService.buildContext(userId);
+		const normalizedSkills = context.normalizedSkills || [];
+		const normalizedSkillSet = new Set(normalizedSkills);
+		
+		const phases = rawRoadmap.phases || [];
+		const totalPhases = phases.length;
+		
+		let furthestPhaseIndex = -1;
+		let completedSkills: string[] = [];
+		let remainingSkills: string[] = [];
+
+		for (let i = 0; i < phases.length; i++) {
+			const phaseSkills = phases[i].skills || [];
+			const roadmapSkills = SkillNormalizer.normalizeArray(phaseSkills);
+			const hasSkill = roadmapSkills.some((skill: string) => normalizedSkillSet.has(skill));
+			if (hasSkill) {
+				furthestPhaseIndex = i;
+			}
+		}
+
+		let completedPhases = 0;
+		let currentPhase = "Getting Started";
+		let nextPhase = "Phase 1";
+		let nextSkill = "Not yet identified";
+		let overallProgress = 0;
+		
+		if (furthestPhaseIndex === -1) {
+			completedPhases = 0;
+			if (phases.length > 0) {
+				currentPhase = phases[0].title;
+				nextPhase = phases.length > 1 ? phases[1].title : "Completion";
+				const p0Skills = SkillNormalizer.normalizeArray(phases[0].skills || []);
+				nextSkill = p0Skills[0] || nextSkill;
+				remainingSkills = phases.flatMap((p: any) => SkillNormalizer.normalizeArray(p.skills || []));
+			}
+		} else {
+			const furthestPhaseSkills = SkillNormalizer.normalizeArray(phases[furthestPhaseIndex].skills || []);
+			const allFurthestComplete = furthestPhaseSkills.every((s: string) => normalizedSkillSet.has(s));
+			
+			console.log("=== DEBUG MATCHING ===");
+			console.log("Normalized profile skills:", Array.from(normalizedSkillSet));
+			console.log(`Normalized roadmap phase ${furthestPhaseIndex} skills:`, furthestPhaseSkills);
+			console.log("Matched:", furthestPhaseSkills.filter((s: string) => normalizedSkillSet.has(s)));
+			
+			if (allFurthestComplete) {
+				completedPhases = furthestPhaseIndex + 1;
+				if (completedPhases < totalPhases) {
+					currentPhase = phases[completedPhases].title;
+					nextPhase = phases.length > completedPhases + 1 ? phases[completedPhases + 1].title : "Completion";
+					const nextPhaseSkills = SkillNormalizer.normalizeArray(phases[completedPhases].skills || []);
+					nextSkill = nextPhaseSkills[0] || nextSkill;
+				} else {
+					currentPhase = "All phases complete";
+					nextPhase = "Ready for the job market";
+					nextSkill = "Ready for the job market";
+				}
+			} else {
+				completedPhases = furthestPhaseIndex;
+				currentPhase = phases[furthestPhaseIndex].title;
+				nextPhase = phases.length > furthestPhaseIndex + 1 ? phases[furthestPhaseIndex + 1].title : "Completion";
+				const missing = furthestPhaseSkills.find((s: string) => !normalizedSkillSet.has(s));
+				if (missing) {
+					nextSkill = missing;
+				}
+			}
+
+			// Gather completed vs remaining
+			for (let i = 0; i < phases.length; i++) {
+				const pSkills = SkillNormalizer.normalizeArray(phases[i].skills || []);
+				if (i < completedPhases) {
+					completedSkills.push(...pSkills);
+				} else if (i === completedPhases) {
+					pSkills.forEach((s: string) => {
+						if (normalizedSkillSet.has(s)) completedSkills.push(s);
+						else remainingSkills.push(s);
+					});
+				} else {
+					remainingSkills.push(...pSkills);
+				}
+			}
+		}
+
+		overallProgress = totalPhases > 0 ? Math.round((completedPhases / totalPhases) * 100) : 0;
+		const remainingPhases = Math.max(0, totalPhases - completedPhases);
+
+		// Return enriched payload
+		return {
+			...rawRoadmap,
+			dynamicProgress: {
+				overallProgress,
+				completedPhases,
+				remainingPhases,
+				currentPhase,
+				nextPhase,
+				nextSkill,
+				completedSkills,
+				remainingSkills,
+				estimatedCompletion: rawRoadmap.estimatedDuration || "Unknown"
+			}
 		};
 	}
 }

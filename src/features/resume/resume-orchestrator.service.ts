@@ -2,6 +2,7 @@ import crypto from "crypto";
 import pdfParse from "pdf-parse";
 import { prisma } from "../../database";
 import { aiService } from "../ai/ai-service";
+import { resumeAnalyzerService } from "./resume-analyzer.service";
 
 export class ResumeOrchestrator {
 	async extractText(fileBuffer: Buffer): Promise<string> {
@@ -138,28 +139,51 @@ Return ONLY valid JSON.`;
 		}
 
 		// Step 2: Quality Analysis Call (Always run to get fresh feedback or use the same if we want)
-		// Wait, the user said "Generate ATS analysis ONLY using the parsed JSON. Do NOT use raw resume text if parsed data already exists."
+		// Run deterministic analysis first
+		const deterministicData = await resumeAnalyzerService.analyze(userId, parsedData, cleanedText);
+
 		const analysisPrompt = `You are an expert ATS system and tech recruiter.
-Evaluate the candidate's resume strictly based on this parsed JSON data. DO NOT use raw formatting.
+Evaluate the candidate's resume based on the parsed JSON data and the calculated deterministic metrics.
 
 Parsed Resume Data:
 ${JSON.stringify(parsedData, null, 2)}
 
+Deterministic ATS Score: ${deterministicData.deterministicScore}
+Keyword Match Score: ${deterministicData.keywordMatchScore} / 35
+Section Completeness Score: ${deterministicData.sectionCompletenessScore} / 20
+Formatting Score: ${deterministicData.formattingScore} / 15
+Projects Score: ${deterministicData.projectsScore} / 10
+Experience Score: ${deterministicData.experienceScore} / 10
+Education Score: ${deterministicData.educationScore} / 5
+Contact Score: ${deterministicData.contactScore} / 5
+
+Missing Skills (Target Career):
+${deterministicData.missingSkills.join(", ") || "None"}
+
+Formatting Checks:
+${deterministicData.formattingChecks.join("\n")}
+
+Career Gap Skills from prior analysis:
+${deterministicData.careerGapSkills.join(", ") || "None"}
+
+INSTRUCTIONS:
+1. You may adjust the Deterministic ATS Score by AT MOST ±5 points if you believe the overall resume quality warrants it. Output this as "finalAtsScore".
+2. Explain your reasoning for the adjustment (or lack thereof) in "scoreAdjustmentReasoning".
+3. Write qualitative feedback explaining the formatting, structure, and missing skills to the user.
+4. If there are missing skills or Career Gap Skills, explicitly mention how their absence affects their target career readiness.
+
 Generate a single valid JSON object exactly matching this schema:
 {
-  "overallScore": 85,
-  "atsScore": 82,
+  "finalAtsScore": 85,
+  "scoreAdjustmentReasoning": "1 sentence explaining the ±5 adjustment based on qualitative factors.",
   "recruiterImpression": "2 sentence summary of what a recruiter would think.",
   "executiveSummary": "1 paragraph executive summary of the candidate's profile.",
-  "structure": "1 sentence evaluation of organization.",
+  "structure": "1 sentence evaluation of organization based on the formatting checks.",
   "writingQuality": "1 sentence evaluation of grammar and impact metrics.",
-  "formatting": "1 sentence evaluation of ATS readability.",
+  "formatting": "1 sentence evaluation of ATS readability based on the formatting checks.",
   "strengths": ["string"],
   "weaknesses": ["string"],
-  "missingSections": ["string"],
-  "improvements": ["string"],
-  "keywordSuggestions": ["string"],
-  "finalVerdict": "1 sentence final verdict on the resume's readiness."
+  "improvements": ["string"]
 }
 Return ONLY valid JSON. Do not include markdown blocks.`;
 
@@ -190,23 +214,23 @@ Return ONLY valid JSON. Do not include markdown blocks.`;
 					fileSize: fileSizeMb,
 					resumeText: cleanedText,
 					parsedData: parsedData,
-					atsScore: analysisResult.atsScore || 0,
-					overallScore: analysisResult.overallScore || 0,
+					atsScore: analysisResult.finalAtsScore || deterministicData.deterministicScore,
+					overallScore: analysisResult.finalAtsScore || deterministicData.deterministicScore,
 					strengths: analysisResult.strengths || [],
 					weaknesses: analysisResult.weaknesses || [],
 					improvements: analysisResult.improvements || [],
-					missingSections: analysisResult.missingSections || [],
+					missingSections: [], // Handled by deterministic formatting checks in UI ideally, but leaving empty here
 					structure: analysisResult.structure || "Not evaluated",
 					writingQuality: analysisResult.writingQuality || "Not evaluated",
 					formatting: analysisResult.formatting || "Not evaluated",
 					recruiterImpression: analysisResult.recruiterImpression || "Not evaluated",
 					summary: "See executive summary",
 					executiveSummary: analysisResult.executiveSummary || "Not evaluated",
-					keywordSuggestions: analysisResult.keywordSuggestions || [],
-					finalVerdict: analysisResult.finalVerdict || "Not evaluated",
+					keywordSuggestions: deterministicData.missingSkills || [],
+					finalVerdict: analysisResult.scoreAdjustmentReasoning || "Not evaluated",
 					careerFit: "Analysis pending...",
-					matchedSkills: [],
-					missingSkills: [],
+					matchedSkills: deterministicData.resumeSkills || [],
+					missingSkills: deterministicData.missingSkills || [],
 					suggestedProjects: [],
 					recommendedCertifications: [],
 					analyzedAt: new Date(),
@@ -217,23 +241,23 @@ Return ONLY valid JSON. Do not include markdown blocks.`;
 					fileSize: fileSizeMb,
 					resumeText: cleanedText,
 					parsedData: parsedData,
-					atsScore: analysisResult.atsScore || 0,
-					overallScore: analysisResult.overallScore || 0,
+					atsScore: analysisResult.finalAtsScore || deterministicData.deterministicScore,
+					overallScore: analysisResult.finalAtsScore || deterministicData.deterministicScore,
 					strengths: analysisResult.strengths || [],
 					weaknesses: analysisResult.weaknesses || [],
 					improvements: analysisResult.improvements || [],
-					missingSections: analysisResult.missingSections || [],
+					missingSections: [],
 					structure: analysisResult.structure || "Not evaluated",
 					writingQuality: analysisResult.writingQuality || "Not evaluated",
 					formatting: analysisResult.formatting || "Not evaluated",
 					recruiterImpression: analysisResult.recruiterImpression || "Not evaluated",
 					summary: "See executive summary",
 					executiveSummary: analysisResult.executiveSummary || "Not evaluated",
-					keywordSuggestions: analysisResult.keywordSuggestions || [],
-					finalVerdict: analysisResult.finalVerdict || "Not evaluated",
+					keywordSuggestions: deterministicData.missingSkills || [],
+					finalVerdict: analysisResult.scoreAdjustmentReasoning || "Not evaluated",
 					careerFit: "Analysis pending...",
-					matchedSkills: [],
-					missingSkills: [],
+					matchedSkills: deterministicData.resumeSkills || [],
+					missingSkills: deterministicData.missingSkills || [],
 					suggestedProjects: [],
 					recommendedCertifications: [],
 				},

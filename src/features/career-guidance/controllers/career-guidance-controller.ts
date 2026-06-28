@@ -1,41 +1,13 @@
 import type { Request, Response } from "express";
 import { prisma } from "../../../database";
 import { getOrchestratedGuidance } from "../../ai/services/guidance-orchestrator";
+import { getOrInitializeProfile } from "../../users/services/profile-service";
 
 export async function generateCareerGuidance(req: Request, res: Response) {
 	try {
 		const { userId, regenerate } = req.body;
 
-		const profile = await prisma.studentProfile.findUnique({
-			where: {
-				userId,
-			},
-			select: {
-				careerGoal: true,
-				skills: true,
-				interests: true,
-				branch: true,
-				cgpa: true,
-				userType: true,
-				experienceLevel: true,
-				preferredDomains: true,
-				currentJobTitle: true,
-				companyName: true,
-				yearsOfExperience: true,
-				industry: true,
-				desiredRole: true,
-				currentSalary: true,
-				expectedSalary: true,
-				projects: true,
-			},
-		});
-
-		if (!profile) {
-			return res.status(404).json({
-				success: false,
-				message: "Student profile not found",
-			});
-		}
+		const profile = await getOrInitializeProfile(userId);
 
 		const guidance = await getOrchestratedGuidance(userId, profile as any, regenerate);
 		if ((guidance as any)._meta) {

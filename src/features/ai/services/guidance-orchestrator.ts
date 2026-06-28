@@ -10,7 +10,7 @@ import {
 /**
  * Builds the comprehensive guidance prompt from a student profile.
  */
-function buildGuidancePrompt(profile: StudentProfileParams, parsedResume?: any): string {
+function buildGuidancePrompt(profile: StudentProfileParams, parsedResume?: any, normalizedSkills?: string[]): string {
 	const isProfessional = profile.userType === "Working Professional";
 	const profileDetails = isProfessional
 		? `- Current Job Title: ${profile.currentJobTitle || "Not specified"}
@@ -35,7 +35,7 @@ User Profile:
 - User Type: ${profile.userType || "Student"}
 - Selected Target Career: ${profile.selectedCareer || "Not specified (infer from profile)"}
 - Experience Level: ${profile.experienceLevel || "Not specified"}
-- Skills: ${profile.skills.length > 0 ? profile.skills.join(", ") : "None specified"}
+- Skills: ${normalizedSkills ? normalizedSkills.join(", ") : (profile.skills.length > 0 ? profile.skills.join(", ") : "None specified")}
 - Interests: ${profile.interests.length > 0 ? profile.interests.join(", ") : "None specified"}
 - Preferred Domains: ${profile.preferredDomains && profile.preferredDomains.length > 0 ? profile.preferredDomains.join(", ") : "None specified"}
 ${profileDetails}
@@ -55,22 +55,18 @@ ${instructionFocus}
 
 Generate a highly concise JSON response containing:
 1. Exactly 3 recommended careers with match percentage and a short 1-2 line reason. If "Selected Target Career" is specified, make sure it is the #1 recommended career.
-2. Skill gap analysis for these careers.
+2. Skill gap analysis for these careers. MUST USE CANONICAL SKILL NAMES (e.g. "Node.js", "Express.js", "JavaScript", "React", "TypeScript", "MongoDB", "Docker").
 3. A specific, detailed 5-8 phase roadmap to achieve the #1 recommended career (incorporate their existing skills).
-4. Curated learning resources for the missing skills.
-   - Generate these EXACT categories as the "type" field: "High Priority", "Documentation", "Courses", "YouTube", "Practice Platforms", "Books", "Certifications".
-   - Each category MUST contain exactly 2-3 highly specific resources.
-   - For common technologies, ALWAYS prefer official resources (e.g. react.dev).
-   - DO NOT hallucinate URLs. Use real trusted providers.
-   - Use EXACT values for priority: "High Priority", "Medium Priority", or "Optional".
-   - Include a shortReason explaining why this resource is recommended.
+4. Extract exactly 5-8 highly specific "learningTopics" based on the user's missing skills. 
+   - These should be specific technologies, concepts, or frameworks (e.g., "React", "Node.js", "System Design", "Docker").
+   - Do NOT generate full resources, only the topic names.
 
 Return ONLY a single valid JSON object that perfectly matches this exact schema structure:
 {
   "recommendedCareers": [{"title": "str", "matchPercentage": 0, "reason": "str"}],
   "skillGaps": [{"career": "str", "missingSkills": ["str"], "readinessScore": 0}],
   "roadmap": [{"step": "str", "objective": "str", "duration": "str", "skills": ["str"], "projects": ["str"], "completion": "str"}],
-  "resources": [{"title": "str", "provider": "str", "type": "str", "skill": "str", "difficulty": "str", "duration": "str", "shortReason": "str", "officialUrl": "str", "priority": "str"}]
+  "learningTopics": ["str"]
 }`;
 }
 
@@ -233,7 +229,11 @@ export async function getOrchestratedGuidance(
 	let source = "gemini";
 
 	try {
-		const prompt = buildGuidancePrompt(profile, parsedResume);
+		// Import careerContextService dynamically if needed to prevent circular dependencies
+		const { careerContextService } = await import("../../career/career-context.service");
+		const context = await careerContextService.buildContext(userId);
+
+		const prompt = buildGuidancePrompt(profile, parsedResume, context.normalizedSkills);
 		const aiResponse = await aiService.generate(prompt, {
 			feature: "Career Guidance & Skill Gap",
 			responseFormat: "json",

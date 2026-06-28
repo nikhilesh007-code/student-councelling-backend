@@ -1,6 +1,7 @@
 import { prisma } from "../../database";
 import { aiService } from "../ai/ai-service";
-import { careerResolver } from "../career/career-resolver.service";
+import { careerContextService } from "../career/career-context.service";
+import { SkillNormalizer } from "../../utils/normalizers";
 
 export class ResumeMatchService {
 	async analyzeMatch(userId: string) {
@@ -19,7 +20,8 @@ export class ResumeMatchService {
 			throw new Error("Resume not found or not parsed. Please upload your resume first.");
 		}
 
-		const { career: targetCareer } = await careerResolver.resolveTargetCareer(userId);
+		const context = await careerContextService.buildContext(userId);
+		const targetCareer = context.targetCareer;
 
 		const systemPrompt = `You are an expert career counselor and AI placement analyzer.
 Analyze the candidate's parsed resume data to determine how well they match their Target Career.
@@ -29,7 +31,9 @@ ${JSON.stringify(resumeAnalysis.parsedData, null, 2)}
 
 Target Career: ${targetCareer}
 
-Return purely JSON matching this exact structure:
+Return purely JSON matching this exact structure. 
+MUST use CANONICAL SKILL NAMES for all skills (e.g. "Node.js", "Express.js", "JavaScript", "React", "TypeScript", "MongoDB", "Docker").
+
 {
   "matchScore": 85,
   "matchingSkills": ["string"],
@@ -51,6 +55,15 @@ Return purely JSON matching this exact structure:
 				.replace(/```/g, "")
 				.trim();
 			const aiResult = JSON.parse(cleaned);
+
+			// Normalize AI outputs
+			aiResult.matchingSkills = SkillNormalizer.normalizeArray(aiResult.matchingSkills);
+			aiResult.missingSkills = SkillNormalizer.normalizeArray(aiResult.missingSkills);
+			
+			// Explicitly subtract profile skills from missing skills just in case
+			aiResult.missingSkills = aiResult.missingSkills.filter(
+				(skill: string) => !context.normalizedSkills.includes(skill)
+			);
 
 			// Save back to DB
 			aiCache = await prisma.aiCache.upsert({

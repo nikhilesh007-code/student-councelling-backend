@@ -2,40 +2,16 @@ import type { Request, Response } from "express";
 import { prisma } from "../../../database";
 import { resolveCareer } from "../../../utils/career-lookup";
 import { getOrchestratedGuidance } from "../../ai/services/guidance-orchestrator";
-import { careerResolver } from "../../career/career-resolver.service";
+import { careerContextService } from "../../career/career-context.service";
+import { SkillNormalizer } from "../../../utils/normalizers";
 
 export async function analyzeSkillGap(req: Request, res: Response) {
 	const start = Date.now();
 	try {
 		const { userId, targetCareer } = req.body;
 
-		const profile = await prisma.studentProfile.findUnique({
-			where: {
-				userId,
-			},
-			select: {
-				selectedCareer: true,
-				careerGoal: true,
-				skills: true,
-				interests: true,
-				branch: true,
-				cgpa: true,
-			},
-		});
-
-		if (!profile) {
-			return res.status(404).json({
-				success: false,
-				message: "Student profile not found",
-			});
-		}
-
-		let interests: string[] = [];
-		if (typeof profile.interests === "string") {
-			interests = (profile.interests as string).split(",").map((i) => i.trim());
-		} else if (Array.isArray(profile.interests)) {
-			interests = profile.interests;
-		}
+		const context = await careerContextService.buildContext(userId, targetCareer);
+		const profile = context.rawProfile;
 
 		try {
 			const guidance = await getOrchestratedGuidance(userId, profile as any);
@@ -46,8 +22,7 @@ export async function analyzeSkillGap(req: Request, res: Response) {
 			}
 
 			if (guidance && guidance.skillGaps && guidance.skillGaps.length > 0) {
-				const resolved = targetCareer ? { career: targetCareer } : await careerResolver.resolveTargetCareer(userId);
-				const resolvedTargetCareer = resolved.career;
+				const resolvedTargetCareer = context.targetCareer;
 				let targetGap = guidance.skillGaps.find(
 					(g) =>
 						resolvedTargetCareer &&
@@ -58,22 +33,31 @@ export async function analyzeSkillGap(req: Request, res: Response) {
 				}
 
 				if (targetGap) {
-					const matchedSkills = profile.skills.filter((s) => !targetGap.missingSkills.includes(s));
+					// Normalize AI skills
+					const aiMissingSkills = SkillNormalizer.normalizeArray(targetGap.missingSkills);
+					
+					// Explicitly SUBTRACT profile skills from AI missing skills
+					const trueMissingSkills = aiMissingSkills.filter(
+						(skill) => !context.normalizedSkills.includes(skill)
+					);
+					
+					// Matched skills are all the profile skills that the user has
+					const matchedSkills = context.normalizedSkills;
 
 					let summary = "";
-					if (targetGap.missingSkills.length === 0) {
+					if (trueMissingSkills.length === 0) {
 						summary = `Excellent! You currently possess all the required skills for a ${targetGap.career} role.`;
 					} else {
-						summary = `You already have some required skills for becoming a ${targetGap.career}. Focus on learning ${targetGap.missingSkills.join(", ")} to improve your career readiness.`;
+						summary = `You already have some required skills for becoming a ${targetGap.career}. Focus on learning ${trueMissingSkills.join(", ")} to improve your career readiness.`;
 					}
 
 					console.log(`[SKILL_GAP] Completed skill gap analysis for user ${userId}`);
 					return res.status(200).json({
 						success: true,
 						career: targetGap.career,
-						currentSkills: profile.skills,
+						currentSkills: context.normalizedSkills,
 						matchedSkills: matchedSkills,
-						missingSkills: targetGap.missingSkills,
+						missingSkills: trueMissingSkills,
 						skillMatches: [], // Legacy payload
 						gapScore: 100 - targetGap.readinessScore,
 						readinessScore: targetGap.readinessScore,
@@ -117,19 +101,27 @@ export async function analyzeSkillGap(req: Request, res: Response) {
 			});
 		}
 
-		const requiredSkills = career.skills.map((item) => item.skill.name);
+		const requiredSkillsRaw = career.skills.map((item) => item.skill.name);
+		const requiredSkills = SkillNormalizer.normalizeArray(requiredSkillsRaw);
 
-		const studentSkills = profile.skills;
+		const studentSkills = context.normalizedSkills;
 
 		const { matchSkills } = await import("../../skills/services/skill-similarity-service");
 		const skillMatches = await matchSkills(requiredSkills, studentSkills);
 
-		const matchedSkills = skillMatches
+		const matchedSkillsRaw = skillMatches
 			.filter((m) => m.matchType === "Exact")
 			.map((m) => m.requiredSkill);
-		const missingSkills = skillMatches
+			
+		const missingSkillsRaw = skillMatches
 			.filter((m) => m.matchType === "Missing")
 			.map((m) => m.requiredSkill);
+
+		const matchedSkills = SkillNormalizer.normalizeArray(matchedSkillsRaw);
+		let missingSkills = SkillNormalizer.normalizeArray(missingSkillsRaw);
+		
+		// Explicitly subtract profile skills from missing skills
+		missingSkills = missingSkills.filter(skill => !studentSkills.includes(skill));
 
 		let totalScore = 0;
 		for (const match of skillMatches) {

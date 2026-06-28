@@ -9,44 +9,86 @@ export class PlacementService {
 		});
 
 		if (aiCache && aiCache.placement && Object.keys(aiCache.placement).length > 0) {
-			return this.normalizeResponse(aiCache.placement as any);
+			const placementData = aiCache.placement as any;
+			if (placementData.schemaVersion === "2.0") {
+				return this.normalizeResponse(placementData);
+			} else {
+				// Delete invalid/legacy cache
+				await prisma.aiCache.update({
+					where: { userId },
+					data: { placement: {} },
+				});
+				aiCache = null;
+			}
 		}
 
 		// JIT Generation: Cache is empty, so we must generate it.
-
-		const resumeAnalysis = await prisma.resumeAnalysis.findUnique({ where: { userId } });
-		if (!resumeAnalysis || !resumeAnalysis.parsedData) {
-			throw new Error("Resume not found or not parsed. Please upload your resume first.");
+		const studentProfile = await prisma.studentProfile.findUnique({ where: { userId } });
+		if (!studentProfile) {
+			throw new Error("Profile not found. Please complete your profile first.");
 		}
 
 		const { career: targetCareer } = await careerResolver.resolveTargetCareer(userId);
 
-		const systemPrompt = `You are an expert tech recruiter and placement readiness evaluator.
-Evaluate the candidate's parsed resume data and generate a highly detailed placement readiness assessment for their target career.
+		const systemPrompt = `You are an expert Placement Preparation Coach for engineering students.
+Your responsibility is ONLY to evaluate placement readiness based on the candidate's profile.
 
-Parsed Resume JSON:
-${JSON.stringify(resumeAnalysis.parsedData, null, 2)}
+Do NOT perform resume analysis.
+Do NOT perform skill-gap analysis.
+Do NOT generate a career roadmap.
 
-Target Career: ${targetCareer}
+Candidate Profile:
+- Target Career: ${targetCareer}
+- Skills: ${studentProfile.skills?.join(", ") || "None"}
+- Projects: ${JSON.stringify(studentProfile.projects) || "None"}
+- Certifications: ${JSON.stringify(studentProfile.certifications) || "None"}
+- CGPA: ${studentProfile.cgpa || "None"}
+- Experience Level: ${studentProfile.experienceLevel || "None"}
 
-Return purely JSON matching this exact structure:
+Guardrails & Consistency Rules:
+- The placement scores must be internally consistent.
+- If Backend Readiness is below 40, Placement Confidence score should not exceed 80.
+- If Coding Readiness is below 30, Product Company status cannot be "Ready".
+- Interview Readiness scores must align with the strengths and weaknesses provided.
+- Never contradict earlier sections.
+
+Return STRICT JSON exactly matching this schema:
 {
-  "readinessScore": 75,
-  "technicalReadiness": 80,
-  "softSkillsReadiness": 70,
-  "placementAssessment": "2-3 sentences evaluating their overall readiness.",
-  "priorityImprovements": ["string"],
-  "todayActions": ["string"],
-  "roadmap": [
-    {"week": 1, "focus": "string describing the week's focus area", "tasks": ["string"]},
-    {"week": 2, "focus": "string", "tasks": ["string"]},
-    {"week": 3, "focus": "string", "tasks": ["string"]},
-    {"week": 4, "focus": "string", "tasks": ["string"]}
+  "schemaVersion": "2.0",
+  "placementReadinessAssessment": "string (2-3 paragraphs evaluating placement readiness)",
+  "technicalStrengths": [
+    { "skill": "string", "importance": "High|Medium|Low", "reason": "string" }
   ],
-  "companyReadiness": [
-    {"company": "e.g. Google", "readinessPercentage": 60, "explanation": "1-2 sentences explaining what's missing"},
-    {"company": "e.g. Amazon", "readinessPercentage": 70, "explanation": "1-2 sentences"}
-  ]
+  "technicalWeaknesses": [
+    { "skill": "string", "importance": "High|Medium|Low", "reason": "string" }
+  ],
+  "companyEligibility": {
+    "service": { "status": "Ready|Needs Improvement|Not Ready", "reason": "string" },
+    "product": { "status": "Ready|Needs Improvement|Not Ready", "reason": "string" },
+    "startup": { "status": "Ready|Needs Improvement|Not Ready", "reason": "string" }
+  },
+  "interviewReadiness": {
+    "coding": { "score": 72, "reason": "string" },
+    "frontend": { "score": 90, "reason": "string" },
+    "backend": { "score": 45, "reason": "string" },
+    "dbms": { "score": 65, "reason": "string" },
+    "os": { "score": 50, "reason": "string" },
+    "cn": { "score": 42, "reason": "string" },
+    "aptitude": { "score": 70, "reason": "string" },
+    "hr": { "score": 88, "reason": "string" }
+  },
+  "fivePlacementPriorities": ["string (exact 5 items, sorted highest to lowest priority, highly actionable)"],
+  "missingPlacementRequirements": {
+    "skills": ["string"],
+    "projects": ["string"],
+    "documents": ["string"]
+  },
+  "recruiterFeedback": "string (max 100 words, professional tone, mention one strength and one critical improvement)",
+  "estimatedPlacementConfidence": {
+    "score": 78,
+    "category": "string (e.g. Moderately Ready)",
+    "confidenceReason": "string"
+  }
 }`;
 
 		try {
@@ -94,50 +136,41 @@ Return purely JSON matching this exact structure:
 
 	/**
 	 * Normalizes the AI response to match the exact shape the frontend expects.
-	 * Handles both old-format (overallReadiness, readiness) and new-format (readinessScore, readinessPercentage) fields.
 	 */
 	private normalizeResponse(raw: any): any {
-		const normalized: any = {
-			readinessScore: raw.readinessScore ?? raw.overallReadiness ?? 0,
-			technicalReadiness: raw.technicalReadiness ?? 0,
-			softSkillsReadiness: raw.softSkillsReadiness ?? 0,
-			placementAssessment: raw.placementAssessment || null,
-			priorityImprovements: Array.isArray(raw.priorityImprovements) ? raw.priorityImprovements : [],
-			todayActions: Array.isArray(raw.todayActions) ? raw.todayActions : [],
+		return {
+			schemaVersion: raw.schemaVersion || "2.0",
+			placementReadinessAssessment: raw.placementReadinessAssessment || "",
+			technicalStrengths: Array.isArray(raw.technicalStrengths) ? raw.technicalStrengths : [],
+			technicalWeaknesses: Array.isArray(raw.technicalWeaknesses) ? raw.technicalWeaknesses : [],
+			companyEligibility: raw.companyEligibility || {
+				service: { status: "Not Ready", reason: "" },
+				product: { status: "Not Ready", reason: "" },
+				startup: { status: "Not Ready", reason: "" },
+			},
+			interviewReadiness: raw.interviewReadiness || {
+				coding: { score: 0, reason: "" },
+				frontend: { score: 0, reason: "" },
+				backend: { score: 0, reason: "" },
+				dbms: { score: 0, reason: "" },
+				os: { score: 0, reason: "" },
+				cn: { score: 0, reason: "" },
+				aptitude: { score: 0, reason: "" },
+				hr: { score: 0, reason: "" },
+			},
+			fivePlacementPriorities: Array.isArray(raw.fivePlacementPriorities) ? raw.fivePlacementPriorities : [],
+			missingPlacementRequirements: raw.missingPlacementRequirements || {
+				skills: [],
+				projects: [],
+				documents: [],
+			},
+			recruiterFeedback: raw.recruiterFeedback || "",
+			estimatedPlacementConfidence: raw.estimatedPlacementConfidence || {
+				score: 0,
+				category: "Unknown",
+				confidenceReason: "",
+			},
 		};
-
-		// Normalize roadmap: handle both string[] and {week, focus, tasks}[] shapes
-		if (Array.isArray(raw.roadmap)) {
-			normalized.roadmap = raw.roadmap.map((item: any, idx: number) => {
-				if (typeof item === "string") {
-					return { week: idx + 1, focus: item, tasks: [] };
-				}
-				return {
-					week: item.week ?? idx + 1,
-					focus: item.focus ?? item.title ?? "Week " + (idx + 1),
-					tasks: Array.isArray(item.tasks) ? item.tasks : [],
-				};
-			});
-		} else {
-			normalized.roadmap = [];
-		}
-
-		// Normalize companyReadiness: map old field names to new ones
-		if (Array.isArray(raw.companyReadiness)) {
-			normalized.companyReadiness = raw.companyReadiness.map((c: any) => ({
-				company: c.company || "Unknown",
-				readinessPercentage: c.readinessPercentage ?? c.readiness ?? 0,
-				explanation:
-					c.explanation ||
-					(Array.isArray(c.missingRequirements)
-						? c.missingRequirements.join(". ")
-						: "No details available."),
-			}));
-		} else {
-			normalized.companyReadiness = [];
-		}
-
-		return normalized;
 	}
 }
 

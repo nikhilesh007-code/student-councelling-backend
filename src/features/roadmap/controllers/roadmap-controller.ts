@@ -3,42 +3,13 @@ import { prisma } from "../../../database";
 import { getOrchestratedGuidance } from "../../ai/services/guidance-orchestrator";
 import { roadmapAnalysisService } from "../services/roadmap-analysis-service";
 import { careerResolver } from "../../career/career-resolver.service";
+import { getOrInitializeProfile } from "../../users/services/profile-service";
 
 export async function generateCareerRoadmap(req: Request, res: Response) {
 	try {
 		const { userId, regenerate } = req.body;
 
-		const profile = await prisma.studentProfile.findUnique({
-			where: {
-				userId,
-			},
-			select: {
-				selectedCareer: true,
-				careerGoal: true,
-				skills: true,
-				interests: true,
-				branch: true,
-				cgpa: true,
-				userType: true,
-				experienceLevel: true,
-				preferredDomains: true,
-				currentJobTitle: true,
-				companyName: true,
-				yearsOfExperience: true,
-				industry: true,
-				desiredRole: true,
-				currentSalary: true,
-				expectedSalary: true,
-				projects: true,
-			},
-		});
-
-		if (!profile) {
-			return res.status(404).json({
-				success: false,
-				message: "Student profile not found",
-			});
-		}
+		const profile = await getOrInitializeProfile(userId);
 
 		const guidance = await getOrchestratedGuidance(userId, profile as any, regenerate);
 

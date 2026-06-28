@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { prisma } from "../../../database";
 import { getOrchestratedGuidance } from "../../ai/services/guidance-orchestrator";
+import { getOrInitializeProfile, calculateProfileCompletion } from "../services/profile-service";
 
 async function generateAndCacheGeminiResults(userId: string, profile: any) {
 	try {
@@ -104,16 +105,13 @@ export async function getProfile(req: Request, res: Response) {
 	try {
 		const { userId } = req.params;
 
-		const profile = await prisma.studentProfile.findUnique({
-			where: {
-				userId: userId as string,
-			},
-			include: { user: true },
-		});
+		const profile = await getOrInitializeProfile(userId as string);
+		const completionInfo = await calculateProfileCompletion(userId as string);
 
 		if (profile) {
 			// Flatten name so frontend can use it easily
 			(profile as any).name = (profile as any).user?.name;
+			(profile as any).completionInfo = completionInfo;
 		}
 
 		res.status(200).json({
@@ -231,6 +229,8 @@ export async function updateProfile(req: Request, res: Response) {
 		});
 
 		(profile as any).name = profile.user?.name;
+		const completionInfo = await calculateProfileCompletion(userId as string);
+		(profile as any).completionInfo = completionInfo;
 
 		res.status(200).json({
 			success: true,
@@ -271,6 +271,9 @@ export async function updateTargetCareer(req: Request, res: Response) {
 		generateAndCacheGeminiResults(userId, profile).catch((e) => {
 			console.error(`[AI ERROR] Background generation failed for ${userId}`, e);
 		});
+
+		const completionInfo = await calculateProfileCompletion(userId as string);
+		(profile as any).completionInfo = completionInfo;
 
 		res.status(200).json({
 			success: true,

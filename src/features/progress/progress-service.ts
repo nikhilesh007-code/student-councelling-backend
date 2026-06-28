@@ -1,159 +1,133 @@
+import crypto from "crypto";
 import { prisma } from "../../database";
 import { aiService } from "../ai/ai-service";
+import { careerContextService } from "../career/career-context.service";
+import { roadmapAnalysisService } from "../roadmap/services/roadmap-analysis-service";
+import { LearningResourceService } from "../learning-resources/services/learning-resource-service";
+import { skillGapAnalysisService } from "../skill-gap-analysis/services/skill-gap-service";
+import { calculateProfileCompletion } from "../users/services/profile-service";
 
-export class ProgressService {
+export class ProgressContextService {
 	async getDashboard(userId: string) {
-		// 1. Gather real DB data in parallel
-		const [profile, roadmapRecords, applications, aiCache, resumeAnalysis] =
-			await Promise.all([
-				prisma.studentProfile.findUnique({ where: { userId } }),
-				prisma.roadmapProgress.findMany({ where: { userId } }),
-				prisma.opportunityApplication.findMany({ where: { userId } }),
-				prisma.aiCache.findUnique({ where: { userId } }),
-				prisma.resumeAnalysis.findUnique({ where: { userId } }),
-			]);
+		// 1. Fetch Profile Completion
+		const profileCompletionData = await calculateProfileCompletion(userId);
+		const profileCompletion = profileCompletionData.percentage;
 
-		// 2. Compute roadmap progress from real records
-		const totalPhases = roadmapRecords.length;
-		const completedPhases = roadmapRecords.filter(
-			(r) => r.status === "COMPLETED",
-		).length;
-		const inProgressPhase = roadmapRecords.find(
-			(r) => r.status === "IN_PROGRESS",
-		);
-		const firstNotStarted = roadmapRecords.find(
-			(r) => r.status === "NOT_STARTED",
-		);
-		const currentMilestone = inProgressPhase
-			? `Phase ${inProgressPhase.phaseId + 1}`
-			: firstNotStarted
-				? `Phase ${firstNotStarted.phaseId + 1}`
-				: totalPhases > 0
-					? "All phases complete"
-					: "No roadmap generated";
-		const roadmapPercentage =
-			totalPhases > 0
-				? Math.round((completedPhases / totalPhases) * 100)
-				: 0;
+		// 2. Fetch Skill Gap (SSoT for readiness and matched/missing skills)
+		const skillGap = await skillGapAnalysisService.getLatestAnalysis(userId);
+		const readinessScore = skillGap.readinessScore;
+		
+		console.log("=== DEBUG PROGRESS: SkillGapService.getLatestAnalysis ===");
+		console.log("readinessScore:", readinessScore);
+		console.log("matchedSkills:", skillGap.matchedSkills);
+		console.log("missingSkills:", skillGap.missingSkills);
 
-		// 3. Compute skill data from profile and cached skill gap
-		const learnedSkills = profile?.skills || [];
-		const cachedRecommendation = aiCache?.recommendation as any;
-		const skillGaps =
-			cachedRecommendation?.skillGaps ||
-			(aiCache?.skillGap as any) ||
-			null;
-		let missingSkills: string[] = [];
-		const inProgressSkills: string[] = [];
-		if (skillGaps) {
-			if (Array.isArray(skillGaps)) {
-				// skillGaps is array of { career, missingSkills, readinessScore }
-				for (const gap of skillGaps) {
-					if (Array.isArray(gap.missingSkills)) {
-						missingSkills.push(...gap.missingSkills);
-					}
-				}
-				missingSkills = [...new Set(missingSkills)];
-			} else if (
-				typeof skillGaps === "object" &&
-				Array.isArray(skillGaps.missingSkills)
-			) {
-				missingSkills = skillGaps.missingSkills;
-			}
+		// 3. Top Strength is the first matched skill from SGA
+		const topStrength = skillGap.matchedSkills.length > 0 ? skillGap.matchedSkills[0] : "Not yet identified";
+
+		// 4. Fetch Career Roadmap (SSoT for roadmap dynamic progress)
+		const roadmap = await roadmapAnalysisService.getRoadmap(userId);
+		const progressInfo = roadmap.dynamicProgress;
+
+		const completedPhases = progressInfo?.completedPhases || 0;
+		const totalPhases = roadmap.phases?.length || 0;
+		const roadmapPercentage = progressInfo?.overallProgress || 0;
+		const currentPhaseTitle = progressInfo?.currentPhase || "Getting Started";
+		const currentStageRatio = `${completedPhases}/${totalPhases}`;
+		const nextSkill = progressInfo?.nextSkill || "Not yet identified";
+
+		console.log("=== DEBUG PROGRESS: RoadmapAnalysisService.getRoadmap ===");
+		console.log("overallProgress:", roadmapPercentage);
+		console.log("completedPhases:", completedPhases);
+		console.log("currentPhase:", currentPhaseTitle);
+		console.log("nextSkill:", nextSkill);
+
+		// 5. Critical Weakness is the next skill from Roadmap
+		const criticalWeakness = nextSkill;
+
+		// 6. Fetch Recommended Resources (Next 2 milestones)
+		let nextLearningSteps: any[] = [];
+		const nextSkillsToLearn = [];
+		if (progressInfo?.remainingSkills?.length > 0) {
+			nextSkillsToLearn.push(...progressInfo.remainingSkills.slice(0, 2));
+		} else if (nextSkill && nextSkill !== "Ready for the job market" && nextSkill !== "Not yet identified") {
+			nextSkillsToLearn.push(nextSkill);
 		}
 
-		// 4. Compute application stats from real records
-		const applied = applications.length;
-		const interviews = applications.filter(
-			(a) => a.status === "INTERVIEW",
-		).length;
-		const offers = applications.filter(
-			(a) => a.status === "OFFERED",
-		).length;
+		if (nextSkillsToLearn.length > 0) {
+			nextLearningSteps = await LearningResourceService.getAggregatedResources(nextSkillsToLearn);
+		}
 
-		// 5. Build dbData from real sources
+		// 7. Database / Deterministic Data Payload
 		const dbData = {
+			profileCompletion,
 			roadmapProgress: {
 				completed: completedPhases,
 				total: totalPhases,
 				percentage: roadmapPercentage,
-				currentMilestone,
+				currentPhaseTitle,
+				currentStageRatio,
 			},
-			learnedSkills,
-			inProgressSkills,
-			missingSkills,
-			applications: {
-				applied,
-				interviews,
-				offers,
+			focusAreas: {
+				topStrength,
+				criticalWeakness,
+				nextSkill,
 			},
+			learnedSkills: skillGap.matchedSkills,
+			missingSkills: skillGap.missingSkills,
+			nextLearningSteps: nextLearningSteps.slice(0, 3), // Top 3 resources
+			readinessScore
 		};
 
-		// 6. Get AI insights (from cache or JIT generate)
+		console.log("=== DEBUG PROGRESS: Final dbData Object ===");
+		console.log(JSON.stringify(dbData, null, 2));
+
+		// 8. Check Cache for AI Summary
+		// The hash must include Target Career, Readiness Score, and Roadmap Progress (completedPhases)
+		const profileString = `${skillGap.career}-${skillGap.matchedSkills.join(",")}-${completedPhases}-${readinessScore}`;
+		const currentHash = crypto.createHash("md5").update(profileString).digest("hex");
+
+		const aiCache = await prisma.aiCache.findUnique({ where: { userId } });
 		let aiData = aiCache?.progress as any;
-		if (aiData && Object.keys(aiData).length > 0) {
+		
+		if (aiData && aiData.hash === currentHash) {
 			return { dbData, aiData };
 		}
 
-		// JIT Generation: Cache is empty, generate AI insights
-		if (!resumeAnalysis || !resumeAnalysis.parsedData) {
-			// No resume — return DB data with empty AI data
-			return {
-				dbData,
-				aiData: {
-					progressSummary:
-						"Upload your resume to get personalized AI progress insights.",
-					insights: [
-						"Complete your profile to improve recommendations.",
-						"Upload a resume for detailed skill gap analysis.",
-						"Set a target career to unlock your learning roadmap.",
-					],
-					topStrength: profile?.skills?.[0] || "Not yet identified",
-					topWeakness: "Resume not uploaded yet",
-					nextSkill: "Upload resume to determine",
-					weeklyRecommendation:
-						"Start by uploading your resume to unlock the full progress dashboard.",
-					estimatedReadiness: 0,
-				},
-			};
-		}
+		// JIT Generate AI Insights
+		console.log(`[JIT PROGRESS] Generating AI summary for user ${userId}...`);
 
-		console.log(
-			`[JIT PROGRESS] Generating progress analysis for user ${userId}...`,
-		);
+		const systemPrompt = `You are an expert career coach.
+Analyze the candidate's deterministic progress metrics to generate a summary and exactly 3 actionable recommendations.
 
-		const systemPrompt = `You are an expert career coach and progress tracker.
-Analyze the candidate's parsed resume data to determine their progress, missing skills, and weekly actionable recommendations.
-
-Parsed Resume JSON:
-${JSON.stringify(resumeAnalysis.parsedData, null, 2)}
-
-Profile Skills: ${learnedSkills.join(", ") || "None listed"}
-Roadmap Progress: ${completedPhases}/${totalPhases} phases completed
+Target Career: ${skillGap.career}
+Readiness Score: ${readinessScore}%
+Strengths: ${topStrength}
+Critical Weakness: ${criticalWeakness}
+Next Skill: ${nextSkill}
 
 Return purely JSON matching this exact structure:
 {
-  "progressSummary": "2-3 sentences summarizing their learning progress.",
-  "insights": ["string", "string", "string"],
-  "topStrength": "string",
-  "topWeakness": "string",
-  "nextSkill": "string (the most important missing skill to learn next)",
-  "weeklyRecommendation": "1 specific task for this week",
-  "estimatedReadiness": 60
-}`;
+  "progressSummary": "2-3 sentences summarizing their overall learning progress and career readiness.",
+  "recommendations": ["string", "string", "string"]
+}
+
+Rules for generation:
+- NO calculations. Use ONLY the provided values.
+- Do not infer readiness. Do not infer progress. Do not invent strengths.
+- Produce EXACTLY 3 concise actionable recommendations based strictly on the current phase and next skill.
+- MAXIMUM 30 words per recommendation.`;
 
 		try {
 			const response = await aiService.generate(systemPrompt, {
-				feature: "Progress Insights Generation",
+				feature: "Progress Summary Generation",
 				responseFormat: "json",
 				userId,
 			});
 
-			const cleaned = response.response
-				.replace(/```json/gi, "")
-				.replace(/```/g, "")
-				.trim();
+			const cleaned = response.response.replace(/```json/gi, "").replace(/```/g, "").trim();
 			aiData = JSON.parse(cleaned);
+			aiData.hash = currentHash;
 
 			// Save back to DB
 			await prisma.aiCache.upsert({
@@ -172,30 +146,20 @@ Return purely JSON matching this exact structure:
 
 			return { dbData, aiData };
 		} catch (error: any) {
-			console.error(
-				`[JIT ERROR] Failed to generate progress analysis for user ${userId}:`,
-				error.message,
-			);
-
-			// Return DB data with fallback AI data so page never crashes
+			console.error(`[JIT ERROR] Failed to generate progress summary for user ${userId}:`, error.message);
 			return {
 				dbData,
 				aiData: {
-					progressSummary:
-						"AI analysis is temporarily unavailable. Your database stats are shown above.",
-					insights: [
-						"AI insights will be available once the service recovers.",
+					progressSummary: "AI summary is temporarily unavailable. Keep working on your next learning steps!",
+					recommendations: [
+						"Focus on your critical weakness.",
+						"Start your next learning step.",
+						"Apply your strengths to new projects."
 					],
-					topStrength: learnedSkills[0] || "Not yet identified",
-					topWeakness: "Analysis pending",
-					nextSkill: "Analysis pending",
-					weeklyRecommendation:
-						"Continue working on your current roadmap phase.",
-					estimatedReadiness: roadmapPercentage,
 				},
 			};
 		}
 	}
 }
 
-export const progressService = new ProgressService();
+export const progressService = new ProgressContextService();

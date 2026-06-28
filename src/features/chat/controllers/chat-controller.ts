@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import { prisma } from "../../../database";
 import { aiService } from "../../ai/ai-service";
 import { careerResolver } from "../../career/career-resolver.service";
+import { getOrInitializeProfile } from "../../users/services/profile-service";
 
 export async function handleChat(req: Request, res: Response) {
 	try {
@@ -14,17 +15,7 @@ export async function handleChat(req: Request, res: Response) {
 			});
 		}
 
-		const profile = await prisma.studentProfile.findUnique({
-			where: { userId },
-			include: { user: true },
-		});
-
-		if (!profile) {
-			return res.status(404).json({
-				success: false,
-				message: "Student profile not found",
-			});
-		}
+		const profile = await getOrInitializeProfile(userId);
 
 		const aiCache = await prisma.aiCache.findUnique({
 			where: { userId },

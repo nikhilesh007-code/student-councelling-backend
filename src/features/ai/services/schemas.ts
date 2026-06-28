@@ -47,7 +47,8 @@ export const ComprehensiveGuidanceSchema = z.object({
 			completion: z.string().optional(),
 		}),
 	),
-	resources: z.array(LearningResourceSchema),
+	resources: z.array(LearningResourceSchema).optional(),
+	learningTopics: z.array(z.string()).optional(),
 });
 
 export type ComprehensiveGuidance = z.infer<typeof ComprehensiveGuidanceSchema>;

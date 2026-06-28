@@ -1,45 +1,51 @@
 import type { Request, Response } from "express";
 import { prisma } from "../../../database";
 import { getOrchestratedGuidance } from "../../ai/services/guidance-orchestrator";
-import { careerResolver } from "../../career/career-resolver.service";
+import { careerContextService } from "../../career/career-context.service";
+
+import { LearningResourceService } from "../services/learning-resource-service";
 
 export async function getLearningResources(req: Request, res: Response) {
 	try {
 		const { userId } = req.body;
 
-		const profile = await prisma.studentProfile.findUnique({
-			where: { userId },
-			select: {
-				selectedCareer: true,
-				careerGoal: true,
-				skills: true,
-				interests: true,
-				branch: true,
-				cgpa: true,
-				userType: true,
-			},
-		});
-
-		if (!profile) {
-			return res.status(404).json({ success: false, message: "Profile not found" });
-		}
+		const context = await careerContextService.buildContext(userId);
+		const profile = context.rawProfile;
 
 		let guidance = await getOrchestratedGuidance(userId, profile as any);
 
-		// If the guidance doesn't have resources (e.g. from an old cache), force regenerate
-		if (!guidance.resources || guidance.resources.length === 0) {
+		let rawTopics: string[] = [];
+
+		if (guidance.learningTopics && guidance.learningTopics.length > 0) {
+			rawTopics = guidance.learningTopics;
+		} else if (guidance.resources && guidance.resources.length > 0) {
+			// Legacy migration: extract topics from old resources
+			rawTopics = guidance.resources.map((r: any) => r.skill || r.topic || r.title);
+		} else {
+			// If neither exist, force regenerate
 			guidance = await getOrchestratedGuidance(userId, profile as any, true);
+			rawTopics = guidance.learningTopics || [];
 		}
 
-		const { career: targetCareer } = await careerResolver.resolveTargetCareer(userId);
+		// Filter out any undefined or empty strings
+		rawTopics = rawTopics.filter(Boolean);
 
-		console.log(`[RESOURCES] Generated resources for user ${userId}`);
+		const targetCareer = context.targetCareer;
+		
+		// Add Target Career to the front of the topics list so we fetch resources for it
+		if (targetCareer && !rawTopics.includes(targetCareer)) {
+			rawTopics.unshift(targetCareer);
+		}
+
+		const aggregatedResources = await LearningResourceService.getAggregatedResources(rawTopics);
+
+		console.log(`[RESOURCES] Generated aggregated resources for user ${userId}`);
 		res.status(200).json({
 			success: true,
 			header: {
 				targetCareer,
 			},
-			resources: guidance.resources || [],
+			resources: aggregatedResources,
 		});
 	} catch (error) {
 		const reason = error instanceof Error ? error.message : "Unknown error";

@@ -1,226 +1,191 @@
-import crypto from "crypto";
 import { prisma } from "../../../database";
-import { generateAndCacheOpportunities } from "../../ai/services/opportunities-orchestrator";
-import { careerResolver } from "../../career/career-resolver.service";
+import { getOrInitializeProfile } from "../../users/services/profile-service";
+import { evaluateOpportunities } from "../../ai/services/opportunities-orchestrator";
+import { IOpportunityProvider, NormalizedOpportunity } from "../providers/provider";
+import { AdzunaProvider } from "../providers/adzuna-provider";
+import { RemotiveProvider } from "../providers/remotive-provider";
+import { GithubProvider } from "../providers/github-provider";
+import { careerContextService } from "../../career/career-context.service";
+import crypto from "crypto";
 
 export class OpportunitiesService {
+	private providers: IOpportunityProvider[] = [
+		new AdzunaProvider(),
+		new RemotiveProvider(),
+		new GithubProvider()
+	];
+
 	async getOpportunities(userId: string | undefined, filters: any) {
 		const { search, type, location, remote, sortBy = "Newest" } = filters;
-
-		let personalizedOpps: any[] = [];
-		let aiProfile: any = null;
+		
+		let processedOpps: any[] = [];
+		let profile: any = null;
 
 		if (userId) {
-			aiProfile = await prisma.aiCache.findUnique({ where: { userId } });
-			const userProfile = await prisma.studentProfile.findUnique({ where: { userId } });
+			const context = await careerContextService.buildContext(userId);
+			profile = context.rawProfile;
+			profile.targetCareer = context.targetCareer;
+			profile.skills = context.normalizedSkills;
+			
+			const profileString = `${context.targetCareer}-${(context.normalizedSkills || []).join(",")}`;
+			const currentHash = crypto.createHash("md5").update(profileString).digest("hex");
 
-			if (!aiProfile || !userProfile) {
-				throw new Error("User profile or AI cache not found");
-			}
+			let aiCache = await prisma.aiCache.findUnique({ where: { userId } });
+			let cachedOpps = aiCache?.opportunities as any;
+			
+			const thirtyMinsAgo = new Date(Date.now() - 30 * 60 * 1000);
 
-			// If AI opportunities not generated yet, generate them and wait
-			if (!aiProfile.opportunities) {
-				const currentHash = "opps-hash-" + Date.now();
-				const newOpps = await generateAndCacheOpportunities(
-					userId,
-					userProfile as any,
-					currentHash,
-				);
-				if (newOpps) {
-					personalizedOpps = newOpps.opportunities;
-				}
+			if (
+				cachedOpps &&
+				cachedOpps.hash === currentHash &&
+				aiCache && aiCache.generatedAt > thirtyMinsAgo &&
+				cachedOpps.jobs && cachedOpps.jobs.length > 0
+			) {
+				console.log(`[OPPORTUNITIES] Cache HIT for user ${userId}`);
+				processedOpps = cachedOpps.jobs;
 			} else {
-				personalizedOpps = (aiProfile.opportunities as any).opportunities || [];
+				console.log(`[OPPORTUNITIES] Cache MISS or profile changed for user ${userId}. Fetching from providers...`);
+				
+				const providerPromises = this.providers.map(async provider => {
+					const start = Date.now();
+					const jobs = await provider.searchJobs(profile);
+					console.log(`[PROVIDER] ${provider.name} | Response Time: ${Date.now() - start}ms | Jobs Fetched: ${jobs?.length || 0}`);
+					return jobs || [];
+				});
+
+				const providerResults = await Promise.all(providerPromises);
+				const allJobs = providerResults.flat();
+				console.log(`[TRACE] Provider returned: ${allJobs.length} jobs combined`);
+				console.log(`[TRACE] After merge: ${allJobs.length}`);
+				
+				const uniqueJobsMap = new Map<string, NormalizedOpportunity>();
+				for (const job of allJobs) {
+					if (!uniqueJobsMap.has(job.id)) {
+						uniqueJobsMap.set(job.id, job);
+					}
+				}
+				const uniqueJobs = Array.from(uniqueJobsMap.values());
+				console.log(`[TRACE] After dedupe: ${uniqueJobs.length}`);
+				
+				const evaluatedJobs = await evaluateOpportunities(userId, profile, uniqueJobs);
+				console.log(`[TRACE] After AI: ${evaluatedJobs.length}`);
+				
+				processedOpps = evaluatedJobs.map((job: any) => {
+					// calculate numeric matchPercentage and matchLevel
+					let matchPercentage = 70;
+					if (typeof job.matchScore === "string") {
+						matchPercentage = parseInt(job.matchScore.replace("%", "")) || 70;
+					} else if (typeof job.matchScore === "number") {
+						matchPercentage = job.matchScore;
+					}
+
+					let matchLevel = "Moderate";
+					if (matchPercentage >= 90) matchLevel = "Excellent";
+					else if (matchPercentage >= 80) matchLevel = "Strong";
+					else if (matchPercentage >= 70) matchLevel = "Good";
+
+					return {
+						...job,
+						matchPercentage,
+						matchLevel,
+						matchReason: [job.matchReason],
+						isBookmarked: false,
+						hasApplied: false
+					}
+				});
+
+				if (processedOpps.length > 0) {
+					const cacheData = {
+						hash: currentHash,
+						jobs: processedOpps
+					};
+					await prisma.aiCache.upsert({
+						where: { userId },
+						create: { userId, opportunities: cacheData, profileHash: currentHash, source: "providers" },
+						update: { opportunities: cacheData, generatedAt: new Date(), source: "providers" }
+					});
+				} else {
+					console.log(`[OPPORTUNITIES] Empty results not cached for user ${userId}`);
+				}
 			}
 		}
 
-		// Find roadmap completion percentage
-		let roadmapScore = 0;
-		let completedPhases = 0;
-		if (userId) {
-			const allPhases = await prisma.roadmapProgress.findMany({ where: { userId } });
-			completedPhases = allPhases.filter((p) => p.status === "COMPLETED").length;
-			const total = Math.max(allPhases.length, 1);
-			roadmapScore = Math.min(10, Math.round((completedPhases / total) * 10));
+		if (userId && processedOpps.length > 0) {
+			const jobIds = processedOpps.map(j => String(j.id));
+			
+			for (const opp of processedOpps) {
+				await prisma.opportunity.upsert({
+					where: { id: String(opp.id) },
+					create: {
+						id: String(opp.id),
+						title: opp.title,
+						company: opp.company,
+						location: opp.location || "Remote",
+						workMode: opp.location?.toLowerCase().includes("remote") ? "Remote" : "Onsite",
+						type: opp.type || "Job",
+						applyUrl: opp.applyUrl,
+						description: opp.description?.substring(0, 500) || "",
+						source: opp.source,
+					},
+					update: {
+						title: opp.title,
+						company: opp.company,
+					}
+				});
+			}
+
+			const bookmarks = await prisma.opportunityBookmark.findMany({
+				where: { userId, opportunityId: { in: jobIds } }
+			});
+			const applications = await prisma.opportunityApplication.findMany({
+				where: { userId, opportunityId: { in: jobIds } }
+			});
+
+			const bookmarkedIds = new Set(bookmarks.map(b => b.opportunityId));
+			const appliedIds = new Set(applications.map(a => a.opportunityId));
+
+			processedOpps = processedOpps.map(opp => ({
+				...opp,
+				isBookmarked: bookmarkedIds.has(String(opp.id)),
+				hasApplied: appliedIds.has(String(opp.id)),
+			}));
 		}
 
-		// Now fetch all from global Opportunity table to get bookmarks/applications
-		const hashIds = personalizedOpps.map((opp) => {
-			const slug = `${opp.title}-${opp.company}`.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-			return crypto.createHash("md5").update(slug).digest("hex").substring(0, 16);
-		});
-
-		const where: any = {};
-		if (userId && hashIds.length > 0) {
-			where.id = { in: hashIds };
-		}
+		let finalOpps = processedOpps;
 
 		if (search) {
-			where.OR = [
-				{ title: { contains: search, mode: "insensitive" } },
-				{ company: { contains: search, mode: "insensitive" } },
-				{ requiredSkills: { hasSome: [search] } },
-			];
+			const s = search.toLowerCase();
+			finalOpps = finalOpps.filter(o => 
+				o.title.toLowerCase().includes(s) || 
+				o.company.toLowerCase().includes(s)
+			);
 		}
-		if (type && type !== "All") where.type = type;
-		if (location && location !== "All")
-			where.location = { contains: location, mode: "insensitive" };
-		if (remote === "true") where.workMode = "Remote";
-
-		const opps = await prisma.opportunity.findMany({
-			where,
-			orderBy: { postedDate: "desc" },
-			include: {
-				bookmarks: userId ? { where: { userId } } : false,
-				applications: userId ? { where: { userId } } : false,
-			},
-		});
-
-		// Merge AI personalized reasoning and calculate score
-		// Since we throw if userProfile or aiProfile is not found, we can guarantee them if userId exists
-		let studentProfile: any = null;
-		let targetCareer = "";
-		if (userId) {
-			studentProfile = await prisma.studentProfile.findUnique({ where: { userId } });
-			const resolved = await careerResolver.resolveTargetCareer(userId);
-			targetCareer = resolved.career;
+		if (type && type !== "All") {
+			finalOpps = finalOpps.filter(o => o.type === type);
+		}
+		if (location && location !== "All") {
+			finalOpps = finalOpps.filter(o => o.location?.toLowerCase().includes(location.toLowerCase()));
+		}
+		if (remote === "true") {
+			finalOpps = finalOpps.filter(o => o.workMode === "Remote" || o.location?.toLowerCase().includes("remote"));
 		}
 
-		const processedOpps = opps.map((opp) => {
-			const pData = personalizedOpps.find((p) => {
-				const slug = `${p.title}-${p.company}`.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-				const hashId = crypto.createHash("md5").update(slug).digest("hex").substring(0, 16);
-				return hashId === opp.id;
+		if (sortBy === "Highest Match") {
+			finalOpps.sort((a, b) => {
+				return b.matchPercentage - a.matchPercentage;
 			});
-
-			let calculatedScore = 0;
-			if (userId && aiProfile && studentProfile) {
-				const recommendation = aiProfile.recommendation as any;
-				const recommendedSkills = recommendation?.recommendedCareers?.[0]?.skills || [];
-
-				// 1. Career Match (0-40)
-				let careerScore = 5; // else
-				const oppTitle = opp.title.toLowerCase();
-				const targetLower = targetCareer.toLowerCase();
-
-				if (targetLower && oppTitle === targetLower) {
-					careerScore = 40;
-				} else if (targetLower && oppTitle.includes(targetLower)) {
-					careerScore = 40;
-				} else if (
-					targetLower &&
-					(oppTitle.includes(targetLower.split(" ")[0]) ||
-						(opp.type === "Internship" && targetLower.includes("developer")))
-				) {
-					careerScore = 30; // same domain
-				} else if (
-					targetLower &&
-					(oppTitle.includes("engineer") || oppTitle.includes("developer"))
-				) {
-					careerScore = 20; // related
-				}
-
-				// 2. Skill Match (0-30)
-				const reqSkills = opp.requiredSkills.map((s) => s.toLowerCase());
-				const recSkillsLower = recommendedSkills.map((s: string) => s.toLowerCase());
-				let skillScore = 0;
-				if (reqSkills.length > 0) {
-					const commonSkills = reqSkills.filter(
-						(s) =>
-							recSkillsLower.includes(s) ||
-							studentProfile.skills.map((st: string) => st.toLowerCase()).includes(s),
-					).length;
-					skillScore = Math.round((commonSkills / reqSkills.length) * 30);
-				} else {
-					skillScore = 15;
-				}
-
-				// 3. Missing Skill Penalty (0 to -15)
-				const skillGap = aiProfile.skillGap as any;
-				const missingSkills =
-					skillGap?.[0]?.missingSkills?.map((s: string) => s.toLowerCase()) || [];
-				let penalty = 0;
-				if (reqSkills.length > 0 && missingSkills.length > 0) {
-					const missingCount = reqSkills.filter((s) => missingSkills.includes(s)).length;
-					penalty = Math.min(15, missingCount * 3);
-				}
-
-				// 4. Roadmap Score (already computed globally as roadmapScore)
-
-				// 5. Education / Experience Score (0-5)
-				let eduScore = 2;
-				if (studentProfile.experienceLevel === "Intermediate" || studentProfile.cgpa >= 8.0)
-					eduScore = 4;
-				if (opp.type === "Internship") eduScore = 5;
-
-				calculatedScore = careerScore + skillScore + roadmapScore + eduScore - penalty;
-
-				// Add deterministic offset for uniqueness
-				const offset = (opp.title.length + opp.company.length) % 4;
-				calculatedScore += offset;
-
-				// Clamp between 15 and 99
-				calculatedScore = Math.max(15, Math.min(99, Math.round(calculatedScore || 0)));
-
-				console.log({
-					opportunityTitle: opp.title,
-					recommendedCareer: targetCareer || "No AI recommendation",
-					opportunitySkills: opp.requiredSkills.join(", ") || "No skills found",
-					profileSkills: studentProfile.skills?.join(", ") || "No skills found",
-					roadmapCompletion: `${completedPhases} phases`,
-					careerScore,
-					skillScore,
-					roadmapScore,
-					educationScore: eduScore,
-					penalty,
-					finalScore: calculatedScore,
-				});
-			} else {
-				console.log("Missing required data for scoring:", {
-					userId,
-					hasAiProfile: !!aiProfile,
-					hasStudentProfile: !!studentProfile,
-				});
-				// Fallback if not logged in
-				calculatedScore = 50 + (opp.title.length % 40);
-			}
-
-			let matchLevel = "Moderate";
-			if (calculatedScore >= 90) matchLevel = "Excellent";
-			else if (calculatedScore >= 80) matchLevel = "Strong";
-			else if (calculatedScore >= 70) matchLevel = "Good";
-
-			const generatedReasons = pData?.matchReason ? [pData.matchReason] : [];
-			if (generatedReasons.length === 0 && calculatedScore > 0) {
-				generatedReasons.push(`Matches your profile with a score of ${calculatedScore}%`);
-			}
-
-			return {
-				...opp,
-				matchPercentage: calculatedScore,
-				matchLevel,
-				matchReason: generatedReasons,
-				recommendedPreparation: pData?.recommendedPreparation || "",
-				estimatedDifficulty: pData?.estimatedDifficulty || "",
-				isBookmarked: userId ? opp.bookmarks.length > 0 : false,
-				hasApplied: userId ? opp.applications.length > 0 : false,
-				bookmarks: undefined,
-				applications: undefined,
-			};
-		});
-
-		// Apply sorting
-		if (sortBy === "Highest Match" && userId) {
-			processedOpps.sort((a, b) => b.matchPercentage - a.matchPercentage);
 		} else if (sortBy === "Deadline Soon") {
-			processedOpps.sort((a, b) => {
+			finalOpps.sort((a, b) => {
 				if (!a.deadline) return 1;
 				if (!b.deadline) return -1;
-				return a.deadline.getTime() - b.deadline.getTime();
+				return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
 			});
 		}
 
-		return processedOpps;
+		console.log(`[TRACE] After filtering: ${finalOpps.length}`);
+		console.log(`[TRACE] Returned to controller: ${finalOpps.length}`);
+
+		return finalOpps;
 	}
 
 	async toggleBookmark(userId: string, opportunityId: string) {
