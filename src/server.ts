@@ -2,6 +2,7 @@ import { app } from "./app";
 import { env } from "./config/env";
 import { prisma } from "./database";
 import { initOllama } from "./features/ai/ai-service";
+import { initReminderScheduler } from "./features/study-planner/cron/reminder-scheduler";
 
 async function bootstrap() {
 	try {
@@ -9,6 +10,7 @@ async function bootstrap() {
 		console.log("[DB] PostgreSQL connected successfully");
 		
 		await initOllama();
+		initReminderScheduler();
 
 		app.listen(env.PORT, () => {
 			console.log(`[SERVER] Backend listening on http://localhost:${env.PORT}`);

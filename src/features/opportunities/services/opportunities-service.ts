@@ -7,6 +7,7 @@ import { RemotiveProvider } from "../providers/remotive-provider";
 import { GithubProvider } from "../providers/github-provider";
 import { careerContextService } from "../../career/career-context.service";
 import crypto from "crypto";
+import { notificationService } from "../../notifications/services/notification.service";
 
 export class OpportunitiesService {
 	private providers: IOpportunityProvider[] = [
@@ -104,6 +105,18 @@ export class OpportunitiesService {
 						create: { userId, opportunities: cacheData, profileHash: currentHash, source: "providers" },
 						update: { opportunities: cacheData, generatedAt: new Date(), source: "providers" }
 					});
+
+					// Trigger Notification
+					notificationService.create({
+						userId,
+						module: 'OPPORTUNITIES',
+						priority: 'SUCCESS',
+						type: 'OPPORTUNITIES_GENERATED',
+						title: 'New Opportunities Found',
+						message: `Found ${processedOpps.length} new career opportunities matching your profile.`,
+						actionType: 'VIEW_OPPORTUNITIES',
+						actionUrl: '/opportunities'
+					}).catch(e => console.error(e));
 				} else {
 					console.log(`[OPPORTUNITIES] Empty results not cached for user ${userId}`);
 				}

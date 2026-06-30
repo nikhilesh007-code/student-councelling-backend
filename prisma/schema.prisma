@@ -22,6 +22,14 @@ model User {
   opportunityBookmarks OpportunityBookmark[]
   opportunityApplications OpportunityApplication[]
   resumeAnalysis ResumeAnalysis?
+  resetPasswordToken    String?
+  resetPasswordExpires  DateTime?
+
+  studyTasks      StudyTask[]
+  studyPlans      StudyPlan[]
+  notifications   Notification[]
+  studyPreference StudyPreference?
+  feedbacks       Feedback[]
 
   @@map("users")
 }
@@ -261,4 +269,122 @@ model ResumeAnalysis {
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("resume_analysis")
+}
+
+enum StudyPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum StudyTaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  MISSED
+  SKIPPED
+}
+
+model StudyPlan {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  type      String   // DAILY or WEEKLY
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tasks     StudyTask[]
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("study_plans")
+}
+
+model StudyTask {
+  id               String          @id @default(cuid())
+  planId           String?
+  userId           String
+  title            String
+  description      String
+  skill            String
+  scheduledAt      DateTime
+  estimatedMinutes Int
+  priority         StudyPriority
+  status           StudyTaskStatus @default(PENDING)
+  reminderSent     Boolean         @default(false)
+  isArchived       Boolean         @default(false)
+  completedAt      DateTime?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  plan             StudyPlan?      @relation(fields: [planId], references: [id], onDelete: Cascade)
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("study_tasks")
+}
+
+model Notification {
+  id           String    @id @default(cuid())
+  userId       String
+  type         String
+  title        String
+  message      String
+  taskId       String?
+  actionUrl    String?
+  module       String    @default("SYSTEM")
+  priority     String    @default("INFO")
+  actionType   String?
+  icon         String?
+  metadata     Json?
+  isRead       Boolean   @default(false)
+  scheduledFor DateTime?
+  expiresAt    DateTime?
+  sent         Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+model StudyPreference {
+  id                 String   @id @default(cuid())
+  userId             String   @unique
+  hoursPerDay        Float
+  preferredStartTime String
+  studyDays          String[]
+  difficulty         String
+  focusArea          String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("study_preferences")
+}
+
+enum FeedbackStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+model Feedback {
+  id            String         @id @default(cuid())
+  userId        String
+  category      String
+  module        String
+  subject       String
+  description   String
+  priority      String
+  attachmentUrl String?
+  status        FeedbackStatus @default(OPEN)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("feedbacks")
 }

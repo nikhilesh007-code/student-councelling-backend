@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import { prisma } from "../../../database";
 import { getOrchestratedGuidance } from "../../ai/services/guidance-orchestrator";
 import { getOrInitializeProfile, calculateProfileCompletion } from "../services/profile-service";
+import { notificationService } from "../../notifications/services/notification.service";
 
 async function generateAndCacheGeminiResults(userId: string, profile: any) {
 	try {
@@ -93,6 +94,18 @@ export async function createProfile(req: Request, res: Response) {
 			success: true,
 			data: profile,
 		});
+
+		// Trigger Notification
+		notificationService.create({
+			userId,
+			module: 'PROFILE',
+			priority: 'SUCCESS',
+			type: 'PROFILE_CREATED',
+			title: 'Profile created',
+			message: 'Your student profile has been successfully created.',
+			actionType: 'VIEW_PROFILE',
+			actionUrl: '/profile'
+		}).catch(e => console.error(e));
 	} catch (error) {
 		res.status(500).json({
 			success: false,
@@ -236,6 +249,31 @@ export async function updateProfile(req: Request, res: Response) {
 			success: true,
 			data: profile,
 		});
+
+		// Trigger Notification
+		notificationService.create({
+			userId,
+			module: 'PROFILE',
+			priority: 'INFO',
+			type: 'PROFILE_UPDATED',
+			title: 'Profile updated',
+			message: `Your profile has been updated. Current completion is ${completionInfo.percentage}%.`,
+			actionType: 'VIEW_PROFILE',
+			actionUrl: '/profile'
+		}).catch(e => console.error(e));
+
+		if (completionInfo.percentage === 100) {
+			notificationService.create({
+				userId,
+				module: 'PROFILE',
+				priority: 'ACHIEVEMENT',
+				type: 'PROFILE_COMPLETE',
+				title: 'Profile 100% Complete',
+				message: 'Congratulations! You have successfully completed your profile.',
+				actionType: 'VIEW_PROFILE',
+				actionUrl: '/profile'
+			}).catch(e => console.error(e));
+		}
 	} catch (error) {
 		console.error("Failed to update profile", error);
 		res.status(500).json({

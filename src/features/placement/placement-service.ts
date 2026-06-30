@@ -1,6 +1,7 @@
 import { prisma } from "../../database";
 import { aiService } from "../ai/ai-service";
 import { careerResolver } from "../career/career-resolver.service";
+import { notificationService } from "../notifications/services/notification.service";
 
 export class PlacementService {
 	async getDashboard(userId: string) {
@@ -118,6 +119,18 @@ Return STRICT JSON exactly matching this schema:
 					generatedAt: new Date(),
 				},
 			});
+
+			// Trigger Notification
+			notificationService.create({
+				userId,
+				module: 'PLACEMENT',
+				priority: aiResult.estimatedPlacementConfidence?.score >= 80 ? 'SUCCESS' : 'INFO',
+				type: 'PLACEMENT_ANALYSIS_GENERATED',
+				title: 'Placement Readiness Evaluated',
+				message: `Your placement readiness score is ${aiResult.estimatedPlacementConfidence?.score || 0}%.`,
+				actionType: 'VIEW_PLACEMENT',
+				actionUrl: '/placement'
+			}).catch(e => console.error(e));
 
 			return this.normalizeResponse(aiResult);
 		} catch (error: any) {

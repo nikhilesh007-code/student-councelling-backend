@@ -121,7 +121,7 @@ const opportunities = [
     workMode: 'Remote',
     type: 'Scholarship',
     duration: '6 months',
-    stipend: 'Full Course Access + Mentorship',
+    stipend: 'Full Course Access + Guidance',
     deadline: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // EXPIRED (2 days ago)
     applyUrl: 'https://developers.google.com/',
     requiredSkills: ['HTML', 'CSS', 'JavaScript'],

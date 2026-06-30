@@ -4,6 +4,7 @@ import { getOrchestratedGuidance } from "../../ai/services/guidance-orchestrator
 import { roadmapAnalysisService } from "../services/roadmap-analysis-service";
 import { careerResolver } from "../../career/career-resolver.service";
 import { getOrInitializeProfile } from "../../users/services/profile-service";
+import { notificationService } from "../../notifications/services/notification.service";
 
 export async function generateCareerRoadmap(req: Request, res: Response) {
 	try {
@@ -93,6 +94,19 @@ export async function generateCareerRoadmap(req: Request, res: Response) {
 		}
 
 		console.log(`[ROADMAP] Generated roadmap for user ${userId}`);
+
+		// Trigger Notification
+		notificationService.create({
+			userId,
+			module: 'ROADMAP',
+			priority: 'SUCCESS',
+			type: 'ROADMAP_GENERATED',
+			title: 'Roadmap generated',
+			message: `Your career roadmap for ${career} is ready.`,
+			actionType: 'VIEW_ROADMAP',
+			actionUrl: '/roadmap'
+		}).catch(e => console.error(e));
+
 		return res.status(200).json({
 			success: true,
 			career: career,

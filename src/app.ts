@@ -19,6 +19,11 @@ import { attachDebugMetadata } from "./middleware/debug-metadata";
 import { errorHandler } from "./middleware/error-handler";
 import { notFound } from "./middleware/not-found";
 import { aiRouter } from "./features/ai/ai-routes";
+import studyPlannerRoutes from "./features/study-planner/routes/study-planner.routes";
+import notificationRoutes from "./features/notifications/routes/notification.routes";
+import feedbackRoutes from "./features/feedback/routes/feedback.routes";
+import { dashboardRoutes } from "./features/dashboard/routes/dashboard-routes";
+import { customAuthRoutes } from "./features/auth/routes/auth-routes";
 
 const app: Express = express();
 
@@ -32,10 +37,15 @@ app.use(
 registerSwaggerDocs(app);
 
 // Express 5
+app.use("/api/auth", customAuthRoutes);
 app.all("/api/auth/{*any}", toNodeHandler(auth));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Serve uploaded files
+import path from "path";
+app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
 app.use((req, res, next) => {
 	if (!req.originalUrl.includes("/api/auth/get-session")) {
@@ -58,6 +68,10 @@ app.use("/api/progress", progressRoutes);
 
 app.use("/api/chat", chatRouter);
 app.use("/api/ai", aiRouter);
+app.use("/api/study-planner", studyPlannerRoutes);
+app.use("/api/notifications", notificationRoutes);
+app.use("/api/feedback", feedbackRoutes);
+app.use("/api/dashboard", dashboardRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

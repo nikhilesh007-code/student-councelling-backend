@@ -3,6 +3,7 @@ import pdfParse from "pdf-parse";
 import { prisma } from "../../database";
 import { aiService } from "../ai/ai-service";
 import { resumeAnalyzerService } from "./resume-analyzer.service";
+import { notificationService } from "../notifications/services/notification.service";
 
 export class ResumeOrchestrator {
 	async extractText(fileBuffer: Buffer): Promise<string> {
@@ -274,6 +275,20 @@ Return ONLY valid JSON. Do not include markdown blocks.`;
 		]);
 
 		console.log(`[RESUME] Resume parsed successfully for user ${userId}`);
+
+		// Trigger Notification
+		const finalScore = analysisResult.finalAtsScore || deterministicData.deterministicScore;
+		notificationService.create({
+			userId,
+			module: 'RESUME',
+			priority: finalScore >= 80 ? 'SUCCESS' : 'INFO',
+			type: 'RESUME_ANALYZED',
+			title: 'Resume analysis complete',
+			message: `Your resume received an ATS score of ${finalScore}%.`,
+			actionType: 'VIEW_RESUME',
+			actionUrl: '/resume'
+		}).catch(e => console.error(e));
+
 		return analysis;
 	}
 

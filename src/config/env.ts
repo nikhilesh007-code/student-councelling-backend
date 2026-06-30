@@ -18,6 +18,10 @@ const envSchema = z.object({
 	OLLAMA_MODEL: z.string().optional(),
 	ADZUNA_APP_ID: z.string().min(1),
 	ADZUNA_APP_KEY: z.string().min(1),
+	SMTP_HOST: z.string().optional(),
+	SMTP_PORT: z.coerce.number().optional(),
+	SMTP_USER: z.string().optional(),
+	SMTP_PASS: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

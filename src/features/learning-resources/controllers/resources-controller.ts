@@ -2,7 +2,7 @@ import type { Request, Response } from "express";
 import { prisma } from "../../../database";
 import { getOrchestratedGuidance } from "../../ai/services/guidance-orchestrator";
 import { careerContextService } from "../../career/career-context.service";
-
+import { notificationService } from "../../notifications/services/notification.service";
 import { LearningResourceService } from "../services/learning-resource-service";
 
 export async function getLearningResources(req: Request, res: Response) {
@@ -40,6 +40,21 @@ export async function getLearningResources(req: Request, res: Response) {
 		const aggregatedResources = await LearningResourceService.getAggregatedResources(rawTopics);
 
 		console.log(`[RESOURCES] Generated aggregated resources for user ${userId}`);
+
+		// Only notify if we actually generated new guidance
+		if ((guidance as any)?._meta?.cacheHit === false) {
+			notificationService.create({
+				userId,
+				module: 'RESOURCES',
+				priority: 'SUCCESS',
+				type: 'RESOURCES_GENERATED',
+				title: 'Learning Resources Generated',
+				message: `New curated learning resources are available for ${targetCareer}.`,
+				actionType: 'VIEW_RESOURCES',
+				actionUrl: '/resources'
+			}).catch(e => console.error(e));
+		}
+
 		res.status(200).json({
 			success: true,
 			header: {

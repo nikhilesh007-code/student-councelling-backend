@@ -26,8 +26,8 @@ export async function handleChat(req: Request, res: Response) {
 		const skillGap = aiCache?.skillGap as any;
 		const missingSkills = skillGap?.[0]?.missingSkills || [];
 
-		const systemPrompt = `You are an expert Career Mentor and Technical Guide. 
-Your goal is to answer the user's questions in a friendly, conversational mentor tone. 
+		const systemPrompt = `You are an expert Career Guide. 
+Your goal is to answer the user's questions in a friendly, conversational guide tone. 
 
 You MUST answer technical questions (e.g., "What is Java?", "Explain Docker", "What is Machine Learning"). 
 If the user asks about a topic not directly relevant to their career, answer the question first, then explain how relevant it is to their chosen career.
