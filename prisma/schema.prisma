@@ -7,29 +7,28 @@ datasource db {
 }
 
 model User {
-  id            String          @id @default(cuid())
-  name          String
-  email         String          @unique
-  emailVerified Boolean         @default(false)
-  image         String?
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
-  accounts      Account[]
-  aiCache       AiCache?
-  sessions        Session[]
-  profile         StudentProfile?
-  roadmapProgress RoadmapProgress[]
-  opportunityBookmarks OpportunityBookmark[]
+  id                      String                   @id @default(cuid())
+  name                    String
+  email                   String                   @unique
+  emailVerified           Boolean                  @default(false)
+  image                   String?
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  resetPasswordToken      String?
+  resetPasswordExpires    DateTime?
+  accounts                Account[]
+  aiCache                 AiCache?
+  feedbacks               Feedback[]
+  notifications           Notification[]
   opportunityApplications OpportunityApplication[]
-  resumeAnalysis ResumeAnalysis?
-  resetPasswordToken    String?
-  resetPasswordExpires  DateTime?
-
-  studyTasks      StudyTask[]
-  studyPlans      StudyPlan[]
-  notifications   Notification[]
-  studyPreference StudyPreference?
-  feedbacks       Feedback[]
+  opportunityBookmarks    OpportunityBookmark[]
+  resumeAnalysis          ResumeAnalysis?
+  roadmapProgress         RoadmapProgress[]
+  sessions                Session[]
+  profile                 StudentProfile?
+  studyPlans              StudyPlan[]
+  studyPreference         StudyPreference?
+  studyTasks              StudyTask[]
 
   @@map("users")
 }
@@ -151,152 +150,132 @@ model CareerSkill {
 }
 
 model AiCache {
-  id             String   @id @default(cuid())
-  userId         String   @unique
-  recommendation Json?
-  opportunities  Json?
-  skillGap       Json?
-  roadmap        Json?
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  recommendation  Json?
+  opportunities   Json?
+  skillGap        Json?
+  roadmap         Json?
   roadmapAnalysis Json?
-  resumeMatch    Json?
-  placement      Json?
-  progress       Json?
-  profileHash    String
-  source         String   @default("gemini")
-  generatedAt    DateTime @default(now())
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resumeMatch     Json?
+  placement       Json?
+  progress        Json?
+  profileHash     String
+  source          String   @default("gemini")
+  generatedAt     DateTime @default(now())
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("ai_caches")
 }
 
 model RoadmapProgress {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   userId      String
   career      String
   phaseId     Int
-  status      String   @default("NOT_STARTED") // NOT_STARTED, IN_PROGRESS, COMPLETED
+  status      String    @default("NOT_STARTED")
   completedAt DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, career, phaseId])
   @@map("roadmap_progress")
 }
 
 model Opportunity {
-  id              String   @id @default(cuid())
-  title           String
-  company         String
-  companyLogo     String?
-  location        String
-  workMode        String   // Remote, Hybrid, Onsite
-  type            String   // Internship, Job, Hackathon, Scholarship, Competition
-  duration        String?
-  stipend         String?  // or salary
-  deadline        DateTime?
-  applyUrl        String?
-  requiredSkills  String[]
-  description     String?
-  eligibility     String?
-  source          String   @default("system")
-  postedDate      DateTime @default(now())
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  bookmarks       OpportunityBookmark[]
-  applications    OpportunityApplication[]
+  id             String                   @id @default(cuid())
+  title          String
+  company        String
+  companyLogo    String?
+  location       String
+  workMode       String
+  type           String
+  duration       String?
+  stipend        String?
+  deadline       DateTime?
+  applyUrl       String?
+  requiredSkills String[]
+  description    String?
+  eligibility    String?
+  source         String                   @default("system")
+  postedDate     DateTime                 @default(now())
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+  applications   OpportunityApplication[]
+  bookmarks      OpportunityBookmark[]
 
   @@map("opportunities")
 }
 
 model OpportunityBookmark {
-  id             String   @id @default(cuid())
-  userId         String
-  opportunityId  String
-  createdAt      DateTime @default(now())
-
-  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  opportunity    Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  id            String      @id @default(cuid())
+  userId        String
+  opportunityId String
+  createdAt     DateTime    @default(now())
+  opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, opportunityId])
   @@map("opportunity_bookmarks")
 }
 
 model OpportunityApplication {
-  id             String   @id @default(cuid())
-  userId         String
-  opportunityId  String
-  status         String   @default("APPLIED")
-  appliedAt      DateTime @default(now())
-
-  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  opportunity    Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  id            String      @id @default(cuid())
+  userId        String
+  opportunityId String
+  status        String      @default("APPLIED")
+  appliedAt     DateTime    @default(now())
+  opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, opportunityId])
   @@map("opportunity_applications")
 }
 
 model ResumeAnalysis {
-  id           String   @id @default(cuid())
-  userId       String   @unique
-  fileUrl      String?
-  fileName     String
-  fileSize     String
-  resumeText   String?
-  parsedData   Json?
-  atsScore     Int
-  overallScore Int
-  careerFit    String?
-  strengths    Json
-  weaknesses   Json
-  matchedSkills Json
-  missingSkills Json
-  missingSections Json
-  improvements Json
-  suggestedProjects Json
+  id                        String   @id @default(cuid())
+  userId                    String   @unique
+  fileUrl                   String?
+  fileName                  String
+  fileSize                  String
+  resumeText                String?
+  parsedData                Json?
+  atsScore                  Int
+  overallScore              Int
+  careerFit                 String?
+  strengths                 Json
+  weaknesses                Json
+  matchedSkills             Json
+  missingSkills             Json
+  missingSections           Json
+  improvements              Json
+  suggestedProjects         Json
   recommendedCertifications Json
-  summary      String
-  executiveSummary String?
-  keywordSuggestions Json?
-  finalVerdict String?
-  structure    String?
-  writingQuality String?
-  formatting   String?
-  recruiterImpression String?
-  analyzedAt   DateTime @default(now())
-  
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  summary                   String
+  executiveSummary          String?
+  keywordSuggestions        Json?
+  finalVerdict              String?
+  structure                 String?
+  writingQuality            String?
+  formatting                String?
+  recruiterImpression       String?
+  analyzedAt                DateTime @default(now())
+  user                      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("resume_analysis")
 }
 
-enum StudyPriority {
-  LOW
-  MEDIUM
-  HIGH
-  URGENT
-}
-
-enum StudyTaskStatus {
-  PENDING
-  IN_PROGRESS
-  COMPLETED
-  MISSED
-  SKIPPED
-}
-
 model StudyPlan {
-  id        String   @id @default(cuid())
+  id        String      @id @default(cuid())
   userId    String
   title     String
-  type      String   // DAILY or WEEKLY
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  type      String
+  isActive  Boolean     @default(true)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   tasks     StudyTask[]
-  
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("study_plans")
 }
@@ -317,7 +296,6 @@ model StudyTask {
   completedAt      DateTime?
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
-
   plan             StudyPlan?      @relation(fields: [planId], references: [id], onDelete: Cascade)
   user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -342,7 +320,6 @@ model Notification {
   expiresAt    DateTime?
   sent         Boolean   @default(false)
   createdAt    DateTime  @default(now())
-
   user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("notifications")
@@ -358,17 +335,9 @@ model StudyPreference {
   focusArea          String
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
-
   user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("study_preferences")
-}
-
-enum FeedbackStatus {
-  OPEN
-  IN_PROGRESS
-  RESOLVED
-  CLOSED
 }
 
 model Feedback {
@@ -383,8 +352,29 @@ model Feedback {
   status        FeedbackStatus @default(OPEN)
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
-
   user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("feedbacks")
+}
+
+enum StudyPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum StudyTaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  MISSED
+  SKIPPED
+}
+
+enum FeedbackStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
 }
