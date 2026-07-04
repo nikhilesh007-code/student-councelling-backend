@@ -20,6 +20,15 @@ export const auth = betterAuth({
 		google: {
 			clientId: env.GOOGLE_CLIENT_ID,
 			clientSecret: env.GOOGLE_CLIENT_SECRET,
+			mapProfileToUser: (profile) => ({
+				emailVerified: true,
+			}),
+		},
+	},
+	account: {
+		accountLinking: {
+			enabled: true,
+			trustedProviders: ["google"],
 		},
 	},
 	user: {

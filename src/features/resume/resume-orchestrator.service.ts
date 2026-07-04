@@ -172,10 +172,12 @@ INSTRUCTIONS:
 2. Explain your reasoning for the adjustment (or lack thereof) in "scoreAdjustmentReasoning".
 3. Write qualitative feedback explaining the formatting, structure, and missing skills to the user.
 4. If there are missing skills or Career Gap Skills, explicitly mention how their absence affects their target career readiness.
+5. Separately calculate "overallQualityScore" — a holistic 0-100 rating of writing quality, achievements, impact, and professionalism. This must be an independent judgment, NOT a copy of the ATS score.
 
 Generate a single valid JSON object exactly matching this schema:
 {
-  "finalAtsScore": 85,
+  "finalAtsScore": ${deterministicData.deterministicScore},
+  "overallQualityScore": "<integer 0-100 rating the resume's OVERALL quality — writing, achievements, impact, professionalism. Judge this independently from the ATS score above. It should reflect a different judgment, not just repeat the same number.>",
   "scoreAdjustmentReasoning": "1 sentence explaining the ±5 adjustment based on qualitative factors.",
   "recruiterImpression": "2 sentence summary of what a recruiter would think.",
   "executiveSummary": "1 paragraph executive summary of the candidate's profile.",
@@ -206,6 +208,10 @@ Return ONLY valid JSON. Do not include markdown blocks.`;
 			throw new Error("Failed to analyze parsed resume data with AI.");
 		}
 
+		// The AI may return this as a number or a numeric string — Number() handles both safely.
+		// If it's missing or invalid, we fall back to the deterministic score so it's never blank.
+		const computedOverallScore = Number(analysisResult.overallQualityScore) || deterministicData.deterministicScore;
+
 		// Save parsed data and wipe out all downstream caches to force JIT regeneration for other modules
 		const [analysis] = await prisma.$transaction([
 			prisma.resumeAnalysis.upsert({
@@ -216,7 +222,7 @@ Return ONLY valid JSON. Do not include markdown blocks.`;
 					resumeText: cleanedText,
 					parsedData: parsedData,
 					atsScore: analysisResult.finalAtsScore || deterministicData.deterministicScore,
-					overallScore: analysisResult.finalAtsScore || deterministicData.deterministicScore,
+					overallScore: computedOverallScore,
 					strengths: analysisResult.strengths || [],
 					weaknesses: analysisResult.weaknesses || [],
 					improvements: analysisResult.improvements || [],
@@ -243,7 +249,7 @@ Return ONLY valid JSON. Do not include markdown blocks.`;
 					resumeText: cleanedText,
 					parsedData: parsedData,
 					atsScore: analysisResult.finalAtsScore || deterministicData.deterministicScore,
-					overallScore: analysisResult.finalAtsScore || deterministicData.deterministicScore,
+					overallScore: computedOverallScore,
 					strengths: analysisResult.strengths || [],
 					weaknesses: analysisResult.weaknesses || [],
 					improvements: analysisResult.improvements || [],

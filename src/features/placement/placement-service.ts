@@ -11,7 +11,7 @@ export class PlacementService {
 
 		if (aiCache && aiCache.placement && Object.keys(aiCache.placement).length > 0) {
 			const placementData = aiCache.placement as any;
-			if (placementData.schemaVersion === "2.0") {
+			if (placementData.schemaVersion === "2.1") {
 				return this.normalizeResponse(placementData);
 			} else {
 				// Delete invalid/legacy cache
@@ -53,9 +53,11 @@ Guardrails & Consistency Rules:
 - Interview Readiness scores must align with the strengths and weaknesses provided.
 - Never contradict earlier sections.
 
+IMPORTANT: The JSON schema below includes example numbers (like 78, 72, 90, 45) purely to show you the correct format and data type. These are NOT real answers — they are placeholders. You MUST replace every single number with your own fresh calculation based on THIS specific candidate's actual skills, projects, CGPA, and experience level above. Reusing any of these example numbers as-is (unless it is a genuine coincidence) is an error.
+
 Return STRICT JSON exactly matching this schema:
 {
-  "schemaVersion": "2.0",
+  "schemaVersion": "2.1",
   "placementReadinessAssessment": "string (2-3 paragraphs evaluating placement readiness)",
   "technicalStrengths": [
     { "skill": "string", "importance": "High|Medium|Low", "reason": "string" }
@@ -152,7 +154,7 @@ Return STRICT JSON exactly matching this schema:
 	 */
 	private normalizeResponse(raw: any): any {
 		return {
-			schemaVersion: raw.schemaVersion || "2.0",
+			schemaVersion: raw.schemaVersion || "2.1",
 			placementReadinessAssessment: raw.placementReadinessAssessment || "",
 			technicalStrengths: Array.isArray(raw.technicalStrengths) ? raw.technicalStrengths : [],
 			technicalWeaknesses: Array.isArray(raw.technicalWeaknesses) ? raw.technicalWeaknesses : [],
