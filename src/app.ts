@@ -39,7 +39,14 @@ registerSwaggerDocs(app);
 console.log("SWAGGER REGISTERED");
 // Express 5
 app.use("/api/auth", customAuthRoutes);
-app.all("/api/auth/{*any}", toNodeHandler(auth));
+app.all(
+  "/api/auth/{*any}",
+  (req, _res, next) => {
+    console.log("BETTER AUTH HIT:", req.method, req.originalUrl);
+    next();
+  },
+  toNodeHandler(auth)
+);
 console.log("BETTER AUTH REGISTERED");
 
 app.use(express.json());
