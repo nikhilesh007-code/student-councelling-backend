@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { hashPassword } from "@better-auth/utils/password";
+const { hashPassword } = require("@better-auth/utils/password");
 import crypto from "crypto";
 import nodemailer from "nodemailer";
 import { prisma } from "../../../database";

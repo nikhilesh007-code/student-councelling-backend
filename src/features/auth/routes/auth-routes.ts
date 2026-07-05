@@ -1,8 +1,8 @@
-import { Router } from "express";
+import { Router, type Router as ExpressRouter } from "express";
 import express from "express";
 import { forgotPassword, resetPassword } from "../controllers/auth-controller";
 
-export const customAuthRoutes = Router();
+export const customAuthRoutes: ExpressRouter = Router();
 
 customAuthRoutes.use(express.json());
 customAuthRoutes.post("/forgot-password", forgotPassword);

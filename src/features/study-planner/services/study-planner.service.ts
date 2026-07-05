@@ -49,7 +49,7 @@ export class StudyPlannerService {
     const startTimeStr = prefsPayload?.preferredStartTime || '09:00';
     const [hours, minutes] = startTimeStr.split(':').map(Number);
 
-    const tasksToCreate = [];
+    const tasksToCreate: any[] = [];
 
     for (const day of aiPlan) {
       const scheduledDate = new Date(startDate);

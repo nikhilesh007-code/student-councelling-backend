@@ -109,7 +109,7 @@ export class FeedbackController {
   async deleteFeedback(req: Request, res: Response) {
     try {
       const userId = (req as any).user?.id || (req.body.userId || req.query.userId);
-      const { id } = req.params;
+      const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
 
       if (!userId) {
         return res.status(401).json({ error: 'Unauthorized' });

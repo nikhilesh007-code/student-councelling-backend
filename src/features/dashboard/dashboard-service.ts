@@ -22,7 +22,15 @@ export class DashboardService {
     }
 
     // 3. Fetch Study Planner Stats (Fast DB Query)
-    let studyStats = { completedTasks: 0, upcomingTasks: [] as any[] };
+    let studyStats: {
+  completedTasks: number;
+  studyHours: number;
+  upcomingTasks: any[];
+} = {
+  completedTasks: 0,
+  studyHours: 0,
+  upcomingTasks: [],
+};
     try {
       const now = new Date();
       const allTasks = await prisma.studyTask.findMany({
@@ -149,7 +157,7 @@ export class DashboardService {
     }
 
     // Fetch Recent Activity (Notifications)
-    let recentActivity = [];
+    let recentActivity: any[] = [];
     try {
       const notifs = await prisma.notification.findMany({
         where: { userId },

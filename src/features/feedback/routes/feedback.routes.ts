@@ -1,7 +1,7 @@
-import { Router } from 'express';
+import { Router, type Router as ExpressRouter } from 'express';
 import { feedbackController, uploadFeedbackImage } from '../controllers/feedback.controller';
 
-const router = Router();
+const router: ExpressRouter = Router();
 
 // Create new feedback report (supports image upload)
 router.post(
