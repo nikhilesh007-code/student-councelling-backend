@@ -26,6 +26,7 @@ import { dashboardRoutes } from "./features/dashboard/routes/dashboard-routes";
 import { customAuthRoutes } from "./features/auth/routes/auth-routes";
 
 const app: Express = express();
+app.set("trust proxy", 1);
 console.log("APP.TS LOADED");
 
 app.use(
