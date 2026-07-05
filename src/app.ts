@@ -26,6 +26,7 @@ import { dashboardRoutes } from "./features/dashboard/routes/dashboard-routes";
 import { customAuthRoutes } from "./features/auth/routes/auth-routes";
 
 const app: Express = express();
+console.log("APP.TS LOADED");
 
 app.use(
 	cors({
@@ -35,10 +36,11 @@ app.use(
 );
 
 registerSwaggerDocs(app);
-
+console.log("SWAGGER REGISTERED");
 // Express 5
 app.use("/api/auth", customAuthRoutes);
 app.all("/api/auth/{*any}", toNodeHandler(auth));
+console.log("BETTER AUTH REGISTERED");
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
