@@ -10,7 +10,7 @@ async function bootstrap() {
 
 		initReminderScheduler();
 
-		app.listen(env.PORT, () => {
+		app.listen(env.PORT as number, "0.0.0.0", () => {
 			console.log(`[SERVER] Backend listening on port ${env.PORT}`);
 		});
 	} catch (error) {
