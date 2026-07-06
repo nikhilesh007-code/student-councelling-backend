@@ -1,4 +1,4 @@
-import { IOpportunityProvider, NormalizedOpportunity } from "./provider";
+import type { IOpportunityProvider, NormalizedOpportunity } from "./provider";
 
 export class GithubProvider implements IOpportunityProvider {
 	name = "GitHub";

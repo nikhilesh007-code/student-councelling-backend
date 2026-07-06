@@ -2,8 +2,8 @@ import crypto from "crypto";
 import { prisma } from "../../database";
 import { aiService } from "../ai/ai-service";
 import { careerContextService } from "../career/career-context.service";
-import { roadmapAnalysisService } from "../roadmap/services/roadmap-analysis-service";
 import { LearningResourceService } from "../learning-resources/services/learning-resource-service";
+import { roadmapAnalysisService } from "../roadmap/services/roadmap-analysis-service";
 import { skillGapAnalysisService } from "../skill-gap-analysis/services/skill-gap-service";
 import { calculateProfileCompletion } from "../users/services/profile-service";
 
@@ -16,14 +16,15 @@ export class ProgressContextService {
 		// 2. Fetch Skill Gap (SSoT for readiness and matched/missing skills)
 		const skillGap = await skillGapAnalysisService.getLatestAnalysis(userId);
 		const readinessScore = skillGap.readinessScore;
-		
+
 		console.log("=== DEBUG PROGRESS: SkillGapService.getLatestAnalysis ===");
 		console.log("readinessScore:", readinessScore);
 		console.log("matchedSkills:", skillGap.matchedSkills);
 		console.log("missingSkills:", skillGap.missingSkills);
 
 		// 3. Top Strength is the first matched skill from SGA
-		const topStrength = skillGap.matchedSkills.length > 0 ? skillGap.matchedSkills[0] : "Not yet identified";
+		const topStrength =
+			skillGap.matchedSkills.length > 0 ? skillGap.matchedSkills[0] : "Not yet identified";
 
 		// 4. Fetch Career Roadmap (SSoT for roadmap dynamic progress)
 		const roadmap = await roadmapAnalysisService.getRoadmap(userId);
@@ -50,7 +51,11 @@ export class ProgressContextService {
 		const nextSkillsToLearn = [];
 		if (progressInfo?.remainingSkills?.length > 0) {
 			nextSkillsToLearn.push(...progressInfo.remainingSkills.slice(0, 2));
-		} else if (nextSkill && nextSkill !== "Ready for the job market" && nextSkill !== "Not yet identified") {
+		} else if (
+			nextSkill &&
+			nextSkill !== "Ready for the job market" &&
+			nextSkill !== "Not yet identified"
+		) {
 			nextSkillsToLearn.push(nextSkill);
 		}
 
@@ -76,7 +81,7 @@ export class ProgressContextService {
 			learnedSkills: skillGap.matchedSkills,
 			missingSkills: skillGap.missingSkills,
 			nextLearningSteps: nextLearningSteps.slice(0, 3), // Top 3 resources
-			readinessScore
+			readinessScore,
 		};
 
 		console.log("=== DEBUG PROGRESS: Final dbData Object ===");
@@ -89,7 +94,7 @@ export class ProgressContextService {
 
 		const aiCache = await prisma.aiCache.findUnique({ where: { userId } });
 		let aiData = aiCache?.progress as any;
-		
+
 		if (aiData && aiData.hash === currentHash) {
 			return { dbData, aiData };
 		}
@@ -125,7 +130,10 @@ Rules for generation:
 				userId,
 			});
 
-			const cleaned = response.response.replace(/```json/gi, "").replace(/```/g, "").trim();
+			const cleaned = response.response
+				.replace(/```json/gi, "")
+				.replace(/```/g, "")
+				.trim();
 			aiData = JSON.parse(cleaned);
 			aiData.hash = currentHash;
 
@@ -146,15 +154,19 @@ Rules for generation:
 
 			return { dbData, aiData };
 		} catch (error: any) {
-			console.error(`[JIT ERROR] Failed to generate progress summary for user ${userId}:`, error.message);
+			console.error(
+				`[JIT ERROR] Failed to generate progress summary for user ${userId}:`,
+				error.message,
+			);
 			return {
 				dbData,
 				aiData: {
-					progressSummary: "AI summary is temporarily unavailable. Keep working on your next learning steps!",
+					progressSummary:
+						"AI summary is temporarily unavailable. Keep working on your next learning steps!",
 					recommendations: [
 						"Focus on your critical weakness.",
 						"Start your next learning step.",
-						"Apply your strengths to new projects."
+						"Apply your strengths to new projects.",
 					],
 				},
 			};

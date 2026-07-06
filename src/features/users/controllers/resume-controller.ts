@@ -42,7 +42,6 @@ export async function parseResume(req: Request, res: Response): Promise<void> {
 		const fileBuffer = req.file.buffer;
 		const mimeType = req.file.mimetype;
 
-
 		if (mimeType !== "application/pdf" && !mimeType.includes("document")) {
 			res
 				.status(400)

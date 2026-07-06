@@ -14,8 +14,6 @@ const envSchema = z.object({
 	GOOGLE_CLIENT_SECRET: z.string().min(1),
 	GEMINI_API_KEY: z.string().min(1).optional(),
 	GROQ_API_KEY: z.string().min(1).optional(),
-	OLLAMA_BASE_URL: z.string().url().default("http://localhost:11434"),
-	OLLAMA_MODEL: z.string().optional(),
 	ADZUNA_APP_ID: z.string().min(1),
 	ADZUNA_APP_KEY: z.string().min(1),
 	SMTP_HOST: z.string().optional(),

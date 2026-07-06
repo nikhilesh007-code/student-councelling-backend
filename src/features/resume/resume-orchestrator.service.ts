@@ -2,8 +2,8 @@ import crypto from "crypto";
 import pdfParse from "pdf-parse";
 import { prisma } from "../../database";
 import { aiService } from "../ai/ai-service";
-import { resumeAnalyzerService } from "./resume-analyzer.service";
 import { notificationService } from "../notifications/services/notification.service";
+import { resumeAnalyzerService } from "./resume-analyzer.service";
 
 export class ResumeOrchestrator {
 	async extractText(fileBuffer: Buffer): Promise<string> {
@@ -25,10 +25,10 @@ export class ResumeOrchestrator {
 
 	private cleanText(rawText: string): string {
 		let text = rawText;
-		
+
 		// 1. Remove page numbers (e.g. Page 1 of 2, 1/2, simply a number at the end/start of a line)
-		text = text.replace(/^Page \d+( of \d+)?$/gmi, "");
-		text = text.replace(/^\d+\/\d+$/gmi, "");
+		text = text.replace(/^Page \d+( of \d+)?$/gim, "");
+		text = text.replace(/^\d+\/\d+$/gim, "");
 
 		// 2. Normalize whitespace but preserve single newlines for structure
 		text = text.replace(/[ \t]+/g, " ");
@@ -72,7 +72,12 @@ export class ResumeOrchestrator {
 		let parsedData: any = null;
 
 		// Use cached parsedData if the resume text hasn't changed
-		if (existingAnalysis && existingAnalysis.resumeText === cleanedText && existingAnalysis.parsedData && Object.keys(existingAnalysis.parsedData).length > 0) {
+		if (
+			existingAnalysis &&
+			existingAnalysis.resumeText === cleanedText &&
+			existingAnalysis.parsedData &&
+			Object.keys(existingAnalysis.parsedData).length > 0
+		) {
 			parsedData = existingAnalysis.parsedData;
 		} else {
 			// Step 1: Robust Parsing Call
@@ -106,7 +111,10 @@ Return ONLY valid JSON.`;
 					userId,
 				});
 
-				const cleaned = response.response.replace(/```json/gi, "").replace(/```/g, "").trim();
+				const cleaned = response.response
+					.replace(/```json/gi, "")
+					.replace(/```/g, "")
+					.trim();
 				parsedData = JSON.parse(cleaned);
 
 				// Ensure all fields exist as arrays/strings
@@ -198,7 +206,10 @@ Return ONLY valid JSON. Do not include markdown blocks.`;
 				userId,
 			});
 
-			const cleaned = response.response.replace(/```json/gi, "").replace(/```/g, "").trim();
+			const cleaned = response.response
+				.replace(/```json/gi, "")
+				.replace(/```/g, "")
+				.trim();
 			analysisResult = JSON.parse(cleaned);
 		} catch (e: any) {
 			console.error(`[ERROR] Failed to analyze parsed resume: ${e.message || "Unknown error"}`);
@@ -210,7 +221,8 @@ Return ONLY valid JSON. Do not include markdown blocks.`;
 
 		// The AI may return this as a number or a numeric string — Number() handles both safely.
 		// If it's missing or invalid, we fall back to the deterministic score so it's never blank.
-		const computedOverallScore = Number(analysisResult.overallQualityScore) || deterministicData.deterministicScore;
+		const computedOverallScore =
+			Number(analysisResult.overallQualityScore) || deterministicData.deterministicScore;
 
 		// Save parsed data and wipe out all downstream caches to force JIT regeneration for other modules
 		const [analysis] = await prisma.$transaction([
@@ -284,16 +296,18 @@ Return ONLY valid JSON. Do not include markdown blocks.`;
 
 		// Trigger Notification
 		const finalScore = analysisResult.finalAtsScore || deterministicData.deterministicScore;
-		notificationService.create({
-			userId,
-			module: 'RESUME',
-			priority: finalScore >= 80 ? 'SUCCESS' : 'INFO',
-			type: 'RESUME_ANALYZED',
-			title: 'Resume analysis complete',
-			message: `Your resume received an ATS score of ${finalScore}%.`,
-			actionType: 'VIEW_RESUME',
-			actionUrl: '/resume'
-		}).catch(e => console.error(e));
+		notificationService
+			.create({
+				userId,
+				module: "RESUME",
+				priority: finalScore >= 80 ? "SUCCESS" : "INFO",
+				type: "RESUME_ANALYZED",
+				title: "Resume analysis complete",
+				message: `Your resume received an ATS score of ${finalScore}%.`,
+				actionType: "VIEW_RESUME",
+				actionUrl: "/resume",
+			})
+			.catch((e) => console.error(e));
 
 		return analysis;
 	}

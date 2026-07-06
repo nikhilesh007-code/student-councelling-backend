@@ -250,7 +250,6 @@ async function seed() {
 			});
 		}
 	}
-
 }
 
 seed()

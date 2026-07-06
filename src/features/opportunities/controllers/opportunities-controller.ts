@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
-import { opportunitiesService } from "../services/opportunities-service";
 import { notificationService } from "../../notifications/services/notification.service";
+import { opportunitiesService } from "../services/opportunities-service";
 
 export class OpportunitiesController {
 	async getOpportunities(req: Request, res: Response) {
@@ -29,16 +29,18 @@ export class OpportunitiesController {
 			const result = await opportunitiesService.toggleBookmark(userId, opportunityId);
 
 			if (result.bookmarked) {
-				notificationService.create({
-					userId,
-					module: 'OPPORTUNITIES',
-					priority: 'INFO',
-					type: 'OPPORTUNITY_BOOKMARKED',
-					title: 'Opportunity Saved',
-					message: 'You have successfully saved an opportunity to your bookmarks.',
-					actionType: 'VIEW_OPPORTUNITIES',
-					actionUrl: '/opportunities'
-				}).catch(e => console.error(e));
+				notificationService
+					.create({
+						userId,
+						module: "OPPORTUNITIES",
+						priority: "INFO",
+						type: "OPPORTUNITY_BOOKMARKED",
+						title: "Opportunity Saved",
+						message: "You have successfully saved an opportunity to your bookmarks.",
+						actionType: "VIEW_OPPORTUNITIES",
+						actionUrl: "/opportunities",
+					})
+					.catch((e) => console.error(e));
 			}
 
 			res.json({ success: true, data: result });
@@ -55,16 +57,18 @@ export class OpportunitiesController {
 				return res.status(400).json({ success: false, message: "Missing params" });
 			const result = await opportunitiesService.markApplied(userId, opportunityId);
 
-			notificationService.create({
-				userId,
-				module: 'OPPORTUNITIES',
-				priority: 'ACHIEVEMENT',
-				type: 'OPPORTUNITY_APPLIED',
-				title: 'Application Submitted',
-				message: 'Great job! You have marked an opportunity as applied.',
-				actionType: 'VIEW_OPPORTUNITIES',
-				actionUrl: '/opportunities'
-			}).catch(e => console.error(e));
+			notificationService
+				.create({
+					userId,
+					module: "OPPORTUNITIES",
+					priority: "ACHIEVEMENT",
+					type: "OPPORTUNITY_APPLIED",
+					title: "Application Submitted",
+					message: "Great job! You have marked an opportunity as applied.",
+					actionType: "VIEW_OPPORTUNITIES",
+					actionUrl: "/opportunities",
+				})
+				.catch((e) => console.error(e));
 
 			res.json({ success: true, data: result });
 		} catch (error: any) {

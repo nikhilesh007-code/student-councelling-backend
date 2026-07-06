@@ -1,9 +1,9 @@
 import type { Request, Response } from "express";
 import { prisma } from "../../../database";
 import { resolveCareer } from "../../../utils/career-lookup";
+import { SkillNormalizer } from "../../../utils/normalizers";
 import { getOrchestratedGuidance } from "../../ai/services/guidance-orchestrator";
 import { careerContextService } from "../../career/career-context.service";
-import { SkillNormalizer } from "../../../utils/normalizers";
 
 export async function analyzeSkillGap(req: Request, res: Response) {
 	const start = Date.now();
@@ -35,12 +35,12 @@ export async function analyzeSkillGap(req: Request, res: Response) {
 				if (targetGap) {
 					// Normalize AI skills
 					const aiMissingSkills = SkillNormalizer.normalizeArray(targetGap.missingSkills);
-					
+
 					// Explicitly SUBTRACT profile skills from AI missing skills
 					const trueMissingSkills = aiMissingSkills.filter(
-						(skill) => !context.normalizedSkills.includes(skill)
+						(skill) => !context.normalizedSkills.includes(skill),
 					);
-					
+
 					// Matched skills are all the profile skills that the user has
 					const matchedSkills = context.normalizedSkills;
 
@@ -112,16 +112,16 @@ export async function analyzeSkillGap(req: Request, res: Response) {
 		const matchedSkillsRaw = skillMatches
 			.filter((m) => m.matchType === "Exact")
 			.map((m) => m.requiredSkill);
-			
+
 		const missingSkillsRaw = skillMatches
 			.filter((m) => m.matchType === "Missing")
 			.map((m) => m.requiredSkill);
 
 		const matchedSkills = SkillNormalizer.normalizeArray(matchedSkillsRaw);
 		let missingSkills = SkillNormalizer.normalizeArray(missingSkillsRaw);
-		
+
 		// Explicitly subtract profile skills from missing skills
-		missingSkills = missingSkills.filter(skill => !studentSkills.includes(skill));
+		missingSkills = missingSkills.filter((skill) => !studentSkills.includes(skill));
 
 		let totalScore = 0;
 		for (const match of skillMatches) {

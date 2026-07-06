@@ -1,33 +1,12 @@
-import type { AIOptions, AIResponse } from './types';
-import { RateLimitError } from './types';
-import { getAIConfig } from './config';
-import crypto from 'crypto';
-import { aiHealthManager } from './ai-health-manager';
-import { GoogleGenAI } from '@google/genai';
-import ollama from 'ollama';
+import { GoogleGenAI } from "@google/genai";
+import crypto from "crypto";
+import { aiHealthManager } from "./ai-health-manager";
+import { getAIConfig } from "./config";
+import type { AIOptions, AIResponse } from "./types";
+import { RateLimitError } from "./types";
 
 const activeUserRequests = new Map<string, Promise<AIResponse>>();
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-const DEFAULT_OLLAMA_MODEL = process.env.OLLAMA_MODEL || "qwen3:8b";
-const FALLBACK_OLLAMA_MODEL = "llama3:latest";
-
-export async function initOllama() {
-	try {
-		const res = await ollama.list();
-		const installedModels = res.models.map(m => m.name);
-		
-		let selectedModel = null;
-		if (installedModels.includes(DEFAULT_OLLAMA_MODEL)) {
-			selectedModel = DEFAULT_OLLAMA_MODEL;
-		} else if (installedModels.includes(FALLBACK_OLLAMA_MODEL)) {
-			selectedModel = FALLBACK_OLLAMA_MODEL;
-		}
-		
-	} catch (e: any) {
-		console.error(`[OLLAMA] Failed to connect to Ollama during startup: ${e.message}`);
-	}
-}
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function executeGroqRequest(prompt: string, options?: AIOptions): Promise<string> {
 	const config = getAIConfig();
@@ -36,21 +15,21 @@ async function executeGroqRequest(prompt: string, options?: AIOptions): Promise<
 	const apiKey = config.groqApiKey;
 	const timeoutMs = options?.timeoutMs ?? 20000;
 	const model = options?.model ?? config.model;
-	const baseUrl = 'https://api.groq.com/openai/v1/chat/completions';
+	const baseUrl = "https://api.groq.com/openai/v1/chat/completions";
 
 	const messages: Array<{ role: string; content: string }> = [];
-	if (options?.systemPrompt) messages.push({ role: 'system', content: options.systemPrompt });
-	messages.push({ role: 'user', content: prompt });
+	if (options?.systemPrompt) messages.push({ role: "system", content: options.systemPrompt });
+	messages.push({ role: "user", content: prompt });
 
 	const body: any = {
 		model,
 		messages,
 		max_completion_tokens: 1200,
-		temperature: options?.temperature !== undefined ? options.temperature : 0.3
+		temperature: options?.temperature !== undefined ? options.temperature : 0.3,
 	};
 
-	if (options?.responseFormat === 'json') {
-		body.response_format = { type: 'json_object' };
+	if (options?.responseFormat === "json") {
+		body.response_format = { type: "json_object" };
 	}
 
 	const controller = new AbortController();
@@ -60,8 +39,8 @@ async function executeGroqRequest(prompt: string, options?: AIOptions): Promise<
 		console.log(`[GROQ] Request sent`);
 		const groqStart = Date.now();
 		const response = await fetch(baseUrl, {
-			method: 'POST',
-			headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+			method: "POST",
+			headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
 			body: JSON.stringify(body),
 			signal: controller.signal,
 		});
@@ -85,7 +64,7 @@ async function executeGroqRequest(prompt: string, options?: AIOptions): Promise<
 		return content.trim();
 	} catch (error: any) {
 		clearTimeout(timeoutId);
-		if (error.name === 'AbortError') throw new Error("Timeout");
+		if (error.name === "AbortError") throw new Error("Timeout");
 		if (error.cause || error.message.includes("fetch")) {
 			(error as any).isNetworkError = true;
 		}
@@ -99,7 +78,7 @@ async function executeGeminiRequest(prompt: string, options?: AIOptions): Promis
 
 	const ai = new GoogleGenAI({ apiKey: config.geminiApiKey });
 	const model = "gemini-2.5-flash"; // default fallback model
-	
+
 	const controller = new AbortController();
 	const timeoutMs = options?.timeoutMs ?? 20000;
 	const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -108,7 +87,7 @@ async function executeGeminiRequest(prompt: string, options?: AIOptions): Promis
 	if (options?.systemPrompt) {
 		finalPrompt = `SYSTEM INSTRUCTION: ${options.systemPrompt}\n\nUSER PROMPT: ${prompt}`;
 	}
-	
+
 	try {
 		console.log(`[GEMINI] Request sent`);
 		const geminiStart = Date.now();
@@ -118,17 +97,17 @@ async function executeGeminiRequest(prompt: string, options?: AIOptions): Promis
 			contents: finalPrompt,
 			config: {
 				temperature: options?.temperature !== undefined ? options.temperature : 0.3,
-				responseMimeType: options?.responseFormat === 'json' ? "application/json" : "text/plain"
-			}
+				responseMimeType: options?.responseFormat === "json" ? "application/json" : "text/plain",
+			},
 		});
 
 		// Timeout race
-		const response = await Promise.race([
+		const response = (await Promise.race([
 			requestPromise,
 			new Promise((_, reject) => {
-				controller.signal.addEventListener('abort', () => reject(new Error("Timeout")));
-			})
-		]) as any;
+				controller.signal.addEventListener("abort", () => reject(new Error("Timeout")));
+			}),
+		])) as any;
 
 		clearTimeout(timeoutId);
 		const content = response.text;
@@ -137,64 +116,19 @@ async function executeGeminiRequest(prompt: string, options?: AIOptions): Promis
 		return content.trim();
 	} catch (error: any) {
 		clearTimeout(timeoutId);
-		if (error.message?.includes('429')) throw new RateLimitError("Gemini Rate Limit");
-		if (error.message?.includes('503') || error.message?.includes('502')) {
+		if (error.message?.includes("429")) throw new RateLimitError("Gemini Rate Limit");
+		if (error.message?.includes("503") || error.message?.includes("502")) {
 			(error as any).isNetworkError = true;
 		}
 		throw error;
 	}
 }
 
-async function executeOllamaRequest(prompt: string, options?: AIOptions): Promise<string> {
-	// Re-verify model availability before request
-	const res = await ollama.list();
-	const installedModels = res.models.map(m => m.name);
-	
-	let modelToUse: string | null = null;
-	if (installedModels.includes(DEFAULT_OLLAMA_MODEL)) {
-		modelToUse = DEFAULT_OLLAMA_MODEL;
-	} else if (installedModels.includes(FALLBACK_OLLAMA_MODEL)) {
-		modelToUse = FALLBACK_OLLAMA_MODEL;
-	}
-	
-	if (!modelToUse) {
-		throw new Error(`No configured Ollama models found. Installed models: ${installedModels.length > 0 ? installedModels.join(', ') : 'None'}`);
-	}
-
-	console.log(`[OLLAMA] Using model ${modelToUse}`);
-	const ollamaStart = Date.now();
-
-	const messages = [];
-	if (options?.systemPrompt) messages.push({ role: 'system', content: options.systemPrompt });
-	messages.push({ role: 'user', content: prompt });
-
-	const format = options?.responseFormat === 'json' ? 'json' : undefined;
-
-	// NO ABORT CONTROLLER. We wait for Ollama until it finishes.
-	try {
-		const response = await ollama.chat({
-			model: modelToUse,
-			messages,
-			format: format as any,
-			options: {
-				temperature: options?.temperature !== undefined ? options.temperature : 0.3
-			}
-		});
-
-		const content = response.message?.content;
-		if (!content) throw new Error("Empty response from Ollama");
-		console.log(`[OLLAMA] Response received (${Date.now() - ollamaStart}ms)`);
-		return content.trim();
-	} catch (error: any) {
-		throw error;
-	}
-}
-
 async function executeWithRetry(
-	providerName: 'groq' | 'gemini',
+	providerName: "groq" | "gemini",
 	executeFn: (prompt: string, options?: AIOptions) => Promise<string>,
 	prompt: string,
-	options?: AIOptions
+	options?: AIOptions,
 ): Promise<{ content: string; latencyMs: number }> {
 	let retries = 0;
 	const maxRetries = 3;
@@ -216,7 +150,9 @@ async function executeWithRetry(
 
 			const healthStatus = aiHealthManager.getStatus().providers[providerName];
 			if (!healthStatus.available) {
-				console.warn(`[AI_ORCH] Provider ${providerName} is marked offline due to too many errors.`);
+				console.warn(
+					`[AI_ORCH] Provider ${providerName} is marked offline due to too many errors.`,
+				);
 				throw error; // Give up and let fallback happen
 			}
 
@@ -224,7 +160,7 @@ async function executeWithRetry(
 				if (retries < maxRetries) {
 					retries++;
 					// Attempt 1 -> wait 2s -> Attempt 2 -> wait 4s -> Attempt 3 -> wait 8s
-					const backoff = Math.pow(2, retries) * 1000;
+					const backoff = 2 ** retries * 1000;
 					await sleep(backoff);
 					continue;
 				}
@@ -235,8 +171,11 @@ async function executeWithRetry(
 	throw new Error(`Unexpected failure loop in ${providerName}`);
 }
 
-async function executeOrchestratedRequest(prompt: string, options?: AIOptions): Promise<AIResponse> {
-	const featureName = options?.feature || 'Unknown Feature';
+async function executeOrchestratedRequest(
+	prompt: string,
+	options?: AIOptions,
+): Promise<AIResponse> {
+	const featureName = options?.feature || "Unknown Feature";
 	console.log(`[AI] Starting Generation for ${featureName}`);
 	const reqId = crypto.randomUUID().substring(0, 8);
 	const startTotal = Date.now();
@@ -244,8 +183,19 @@ async function executeOrchestratedRequest(prompt: string, options?: AIOptions): 
 	// 1. Groq
 	if (aiHealthManager.getStatus().providers.groq.available) {
 		try {
-			const { content, latencyMs } = await executeWithRetry('groq', executeGroqRequest, prompt, options);
-			return { provider: 'Groq', fallbackUsed: false, response: content, durationMs: latencyMs, source: 'groq' };
+			const { content, latencyMs } = await executeWithRetry(
+				"groq",
+				executeGroqRequest,
+				prompt,
+				options,
+			);
+			return {
+				provider: "Groq",
+				fallbackUsed: false,
+				response: content,
+				durationMs: latencyMs,
+				source: "groq",
+			};
 		} catch (e: any) {
 			console.warn(`[AI_ORCH] | ID: ${reqId} | Groq failed completely: ${e.message}`);
 		}
@@ -254,39 +204,38 @@ async function executeOrchestratedRequest(prompt: string, options?: AIOptions): 
 	// 2. Gemini
 	if (aiHealthManager.getStatus().providers.gemini.available) {
 		try {
-			const { content, latencyMs } = await executeWithRetry('gemini', executeGeminiRequest, prompt, options);
-			return { provider: 'Gemini', fallbackUsed: true, response: content, durationMs: latencyMs, source: 'gemini' };
+			const { content, latencyMs } = await executeWithRetry(
+				"gemini",
+				executeGeminiRequest,
+				prompt,
+				options,
+			);
+			return {
+				provider: "Gemini",
+				fallbackUsed: true,
+				response: content,
+				durationMs: latencyMs,
+				source: "gemini",
+			};
 		} catch (e: any) {
 			console.warn(`[AI_ORCH] | ID: ${reqId} | Gemini failed completely: ${e.message}`);
 		}
 	}
 
-	// 3. Ollama (Local)
-	const ollamaStart = Date.now();
-	try {
-		const content = await executeOllamaRequest(prompt, options);
-		const latencyMs = Date.now() - ollamaStart;
-		aiHealthManager.recordSuccess('ollama', latencyMs);
-		return { provider: 'Ollama', fallbackUsed: true, response: content, durationMs: latencyMs, source: 'ollama' };
-	} catch (e: any) {
-		aiHealthManager.recordError('ollama', false);
-		console.error(`[ERROR] Ollama failed: ${e.message}`);
-	}
-
 	// 4. Graceful Fallback if all fail
 	console.error(`[ERROR] FATAL: ALL AI PROVIDERS FAILED`);
 	return {
-		provider: 'Fallback',
+		provider: "Fallback",
 		fallbackUsed: true,
 		durationMs: Date.now() - startTotal,
 		response: JSON.stringify({ success: false, message: "AI temporarily unavailable." }),
-		source: 'fallback'
+		source: "fallback",
 	};
 }
 
 export async function generate(prompt: string, options?: AIOptions): Promise<AIResponse> {
 	const userId = options?.userId;
-	const lockKey = userId ? `${userId}-${options?.feature || 'general'}` : null;
+	const lockKey = userId ? `${userId}-${options?.feature || "general"}` : null;
 
 	if (lockKey) {
 		if (activeUserRequests.has(lockKey)) {

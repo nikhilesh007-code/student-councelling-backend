@@ -123,16 +123,18 @@ Return STRICT JSON exactly matching this schema:
 			});
 
 			// Trigger Notification
-			notificationService.create({
-				userId,
-				module: 'PLACEMENT',
-				priority: aiResult.estimatedPlacementConfidence?.score >= 80 ? 'SUCCESS' : 'INFO',
-				type: 'PLACEMENT_ANALYSIS_GENERATED',
-				title: 'Placement Readiness Evaluated',
-				message: `Your placement readiness score is ${aiResult.estimatedPlacementConfidence?.score || 0}%.`,
-				actionType: 'VIEW_PLACEMENT',
-				actionUrl: '/placement'
-			}).catch(e => console.error(e));
+			notificationService
+				.create({
+					userId,
+					module: "PLACEMENT",
+					priority: aiResult.estimatedPlacementConfidence?.score >= 80 ? "SUCCESS" : "INFO",
+					type: "PLACEMENT_ANALYSIS_GENERATED",
+					title: "Placement Readiness Evaluated",
+					message: `Your placement readiness score is ${aiResult.estimatedPlacementConfidence?.score || 0}%.`,
+					actionType: "VIEW_PLACEMENT",
+					actionUrl: "/placement",
+				})
+				.catch((e) => console.error(e));
 
 			return this.normalizeResponse(aiResult);
 		} catch (error: any) {
@@ -173,7 +175,9 @@ Return STRICT JSON exactly matching this schema:
 				aptitude: { score: 0, reason: "" },
 				hr: { score: 0, reason: "" },
 			},
-			fivePlacementPriorities: Array.isArray(raw.fivePlacementPriorities) ? raw.fivePlacementPriorities : [],
+			fivePlacementPriorities: Array.isArray(raw.fivePlacementPriorities)
+				? raw.fivePlacementPriorities
+				: [],
 			missingPlacementRequirements: raw.missingPlacementRequirements || {
 				skills: [],
 				projects: [],

@@ -31,7 +31,7 @@ export async function getLearningResources(req: Request, res: Response) {
 		rawTopics = rawTopics.filter(Boolean);
 
 		const targetCareer = context.targetCareer;
-		
+
 		// Add Target Career to the front of the topics list so we fetch resources for it
 		if (targetCareer && !rawTopics.includes(targetCareer)) {
 			rawTopics.unshift(targetCareer);
@@ -43,16 +43,18 @@ export async function getLearningResources(req: Request, res: Response) {
 
 		// Only notify if we actually generated new guidance
 		if ((guidance as any)?._meta?.cacheHit === false) {
-			notificationService.create({
-				userId,
-				module: 'RESOURCES',
-				priority: 'SUCCESS',
-				type: 'RESOURCES_GENERATED',
-				title: 'Learning Resources Generated',
-				message: `New curated learning resources are available for ${targetCareer}.`,
-				actionType: 'VIEW_RESOURCES',
-				actionUrl: '/resources'
-			}).catch(e => console.error(e));
+			notificationService
+				.create({
+					userId,
+					module: "RESOURCES",
+					priority: "SUCCESS",
+					type: "RESOURCES_GENERATED",
+					title: "Learning Resources Generated",
+					message: `New curated learning resources are available for ${targetCareer}.`,
+					actionType: "VIEW_RESOURCES",
+					actionUrl: "/resources",
+				})
+				.catch((e) => console.error(e));
 		}
 
 		res.status(200).json({

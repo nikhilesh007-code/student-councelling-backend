@@ -1,15 +1,15 @@
-import { aiService } from "../ai-service";
 import { careerContextService } from "../../career/career-context.service";
-import { NormalizedOpportunity } from "../../opportunities/providers/provider";
+import type { NormalizedOpportunity } from "../../opportunities/providers/provider";
+import { aiService } from "../ai-service";
 
 export async function evaluateOpportunities(
 	userId: string,
 	profile: any,
-	jobs: NormalizedOpportunity[]
+	jobs: NormalizedOpportunity[],
 ) {
 	if (jobs.length < 10) {
 		// Skip AI ranking to save tokens
-		return jobs.map(job => ({
+		return jobs.map((job) => ({
 			...job,
 			matchScore: "75%",
 			matchReason: "Good potential match.",
@@ -19,7 +19,7 @@ export async function evaluateOpportunities(
 			duration: "",
 			stipend: "",
 			applyUrl: job.redirectUrl,
-			requiredSkills: []
+			requiredSkills: [],
 		}));
 	}
 
@@ -29,13 +29,13 @@ export async function evaluateOpportunities(
 	try {
 		const context = await careerContextService.buildContext(userId);
 		const targetCareer = context.targetCareer;
-		
-		const jobsPayload = topJobs.map(j => ({
+
+		const jobsPayload = topJobs.map((j) => ({
 			id: j.id,
 			title: j.title,
 			company: j.company,
 			location: j.location,
-			category: j.category
+			category: j.category,
 		}));
 
 		const prompt = `Evaluate these 15 jobs for a user targeting: ${targetCareer}.
@@ -66,14 +66,17 @@ Format exactly like this (no markdown):
 
 		let text = aiResponse.response.trim();
 		if (text.startsWith("```json")) {
-			text = text.replace(/^```json/, "").replace(/```$/, "").trim();
+			text = text
+				.replace(/^```json/, "")
+				.replace(/```$/, "")
+				.trim();
 		}
 
 		const evaluations = JSON.parse(text);
 
 		console.log(`[AI RANKING] Groq ranking duration: ${Date.now() - start}ms`);
 
-		return topJobs.map(job => {
+		return topJobs.map((job) => {
 			const evalData = evaluations[job.id] || {};
 			return {
 				...job,
@@ -85,13 +88,15 @@ Format exactly like this (no markdown):
 				duration: "",
 				stipend: job.salaryMin ? `${job.salaryMin} - ${job.salaryMax}` : "",
 				applyUrl: job.redirectUrl,
-				requiredSkills: evalData.missingSkills || []
+				requiredSkills: evalData.missingSkills || [],
 			};
 		});
-
 	} catch (error: any) {
-		console.error(`[BACKGROUND ERROR] AI opportunity evaluation failed for user ${userId}:`, error.message);
-		return topJobs.map(job => ({
+		console.error(
+			`[BACKGROUND ERROR] AI opportunity evaluation failed for user ${userId}:`,
+			error.message,
+		);
+		return topJobs.map((job) => ({
 			...job,
 			matchScore: "70%",
 			matchReason: "Fallback match.",
@@ -99,7 +104,7 @@ Format exactly like this (no markdown):
 			estimatedDifficulty: "Medium",
 			type: job.contractType || "Job",
 			applyUrl: job.redirectUrl,
-			requiredSkills: []
+			requiredSkills: [],
 		}));
 	}
 }

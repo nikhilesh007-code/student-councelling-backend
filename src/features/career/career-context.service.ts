@@ -1,6 +1,6 @@
+import { CareerNormalizer, SkillNormalizer } from "../../utils/normalizers";
 import { getOrInitializeProfile } from "../users/services/profile-service";
 import { careerResolver } from "./career-resolver.service";
-import { SkillNormalizer, CareerNormalizer } from "../../utils/normalizers";
 
 export interface CareerContextData {
 	targetCareer: string;

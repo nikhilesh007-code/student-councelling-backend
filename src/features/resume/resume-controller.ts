@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
+import { notificationService } from "../notifications/services/notification.service";
 import { resumeMatchService } from "./resume-match-service";
 import { resumeOrchestrator } from "./resume-orchestrator.service";
-import { notificationService } from "../notifications/services/notification.service";
 
 export class ResumeController {
 	async upload(req: Request, res: Response) {
@@ -22,16 +22,18 @@ export class ResumeController {
 			const text = await resumeOrchestrator.extractText(fileBuffer);
 
 			// Trigger Notification
-			notificationService.create({
-				userId,
-				module: 'RESUME',
-				priority: 'INFO',
-				type: 'RESUME_UPLOADED',
-				title: 'Resume uploaded',
-				message: `Successfully uploaded ${fileName} (${fileSizeMb}).`,
-				actionType: 'VIEW_RESUME',
-				actionUrl: '/resume'
-			}).catch(e => console.error(e));
+			notificationService
+				.create({
+					userId,
+					module: "RESUME",
+					priority: "INFO",
+					type: "RESUME_UPLOADED",
+					title: "Resume uploaded",
+					message: `Successfully uploaded ${fileName} (${fileSizeMb}).`,
+					actionType: "VIEW_RESUME",
+					actionUrl: "/resume",
+				})
+				.catch((e) => console.error(e));
 
 			res.status(200).json({
 				fileName,

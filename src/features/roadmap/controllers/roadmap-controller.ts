@@ -1,10 +1,10 @@
 import type { Request, Response } from "express";
 import { prisma } from "../../../database";
 import { getOrchestratedGuidance } from "../../ai/services/guidance-orchestrator";
-import { roadmapAnalysisService } from "../services/roadmap-analysis-service";
 import { careerResolver } from "../../career/career-resolver.service";
-import { getOrInitializeProfile } from "../../users/services/profile-service";
 import { notificationService } from "../../notifications/services/notification.service";
+import { getOrInitializeProfile } from "../../users/services/profile-service";
+import { roadmapAnalysisService } from "../services/roadmap-analysis-service";
 
 export async function generateCareerRoadmap(req: Request, res: Response) {
 	try {
@@ -38,9 +38,9 @@ export async function generateCareerRoadmap(req: Request, res: Response) {
 
 		// Format phases with joined DB status
 		const formattedRoadmap = guidance.roadmap.map((step: any, index: number) => {
-			const record = progressRecords.find(p => p.phaseId === index);
+			const record = progressRecords.find((p) => p.phaseId === index);
 			const status = record?.status || "NOT_STARTED";
-			
+
 			if (status === "COMPLETED") {
 				completedPhases++;
 			} else if (firstIncomplete === -1) {
@@ -54,21 +54,21 @@ export async function generateCareerRoadmap(req: Request, res: Response) {
 				duration: step.duration,
 				skills: step.skills || [],
 				projects: step.projects || [],
-				description: step.objective || "", 
+				description: step.objective || "",
 				objective: step.objective || "",
 				completion: step.completion || "",
 				status: status,
-				progress: status === 'COMPLETED' ? 100 : status === 'IN_PROGRESS' ? 50 : 0,
+				progress: status === "COMPLETED" ? 100 : status === "IN_PROGRESS" ? 50 : 0,
 				items: (step.skills || []).map((s: string) => ({
 					name: s,
-					done: status === 'COMPLETED'
-				}))
+					done: status === "COMPLETED",
+				})),
 			};
 		});
 
 		const totalPhases = formattedRoadmap.length;
 		const overallProgress = totalPhases > 0 ? Math.round((completedPhases / totalPhases) * 100) : 0;
-		
+
 		if (firstIncomplete === -1 && completedPhases === totalPhases && totalPhases > 0) {
 			firstIncomplete = totalPhases - 1; // Last phase
 		}
@@ -89,23 +89,25 @@ export async function generateCareerRoadmap(req: Request, res: Response) {
 			insights = [
 				`Focus on ${guidance.roadmap[0].step} first to build a solid foundation.`,
 				`Your major milestone will be ${guidance.roadmap[Math.floor(guidance.roadmap.length / 2)].step}.`,
-				`Complete all ${totalPhases} phases to become placement ready as a ${career}.`
+				`Complete all ${totalPhases} phases to become placement ready as a ${career}.`,
 			];
 		}
 
 		console.log(`[ROADMAP] Generated roadmap for user ${userId}`);
 
 		// Trigger Notification
-		notificationService.create({
-			userId,
-			module: 'ROADMAP',
-			priority: 'SUCCESS',
-			type: 'ROADMAP_GENERATED',
-			title: 'Roadmap generated',
-			message: `Your career roadmap for ${career} is ready.`,
-			actionType: 'VIEW_ROADMAP',
-			actionUrl: '/roadmap'
-		}).catch(e => console.error(e));
+		notificationService
+			.create({
+				userId,
+				module: "ROADMAP",
+				priority: "SUCCESS",
+				type: "ROADMAP_GENERATED",
+				title: "Roadmap generated",
+				message: `Your career roadmap for ${career} is ready.`,
+				actionType: "VIEW_ROADMAP",
+				actionUrl: "/roadmap",
+			})
+			.catch((e) => console.error(e));
 
 		return res.status(200).json({
 			success: true,

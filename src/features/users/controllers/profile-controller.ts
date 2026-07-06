@@ -1,12 +1,11 @@
 import type { Request, Response } from "express";
 import { prisma } from "../../../database";
 import { getOrchestratedGuidance } from "../../ai/services/guidance-orchestrator";
-import { getOrInitializeProfile, calculateProfileCompletion } from "../services/profile-service";
 import { notificationService } from "../../notifications/services/notification.service";
+import { calculateProfileCompletion, getOrInitializeProfile } from "../services/profile-service";
 
 async function generateAndCacheGeminiResults(userId: string, profile: any) {
 	try {
-
 		let interests: string[] = [];
 		if (typeof profile.interests === "string") {
 			interests = (profile.interests as string).split(",").map((i) => i.trim());
@@ -23,7 +22,6 @@ async function generateAndCacheGeminiResults(userId: string, profile: any) {
 			},
 			true,
 		); // forceRegenerate = true
-
 	} catch (error) {
 		console.error(`[AI ERROR] Failed to precache orchestrated guidance for ${userId}`, error);
 	}
@@ -96,16 +94,18 @@ export async function createProfile(req: Request, res: Response) {
 		});
 
 		// Trigger Notification
-		notificationService.create({
-			userId,
-			module: 'PROFILE',
-			priority: 'SUCCESS',
-			type: 'PROFILE_CREATED',
-			title: 'Profile created',
-			message: 'Your student profile has been successfully created.',
-			actionType: 'VIEW_PROFILE',
-			actionUrl: '/profile'
-		}).catch(e => console.error(e));
+		notificationService
+			.create({
+				userId,
+				module: "PROFILE",
+				priority: "SUCCESS",
+				type: "PROFILE_CREATED",
+				title: "Profile created",
+				message: "Your student profile has been successfully created.",
+				actionType: "VIEW_PROFILE",
+				actionUrl: "/profile",
+			})
+			.catch((e) => console.error(e));
 	} catch (error) {
 		res.status(500).json({
 			success: false,
@@ -251,28 +251,32 @@ export async function updateProfile(req: Request, res: Response) {
 		});
 
 		// Trigger Notification
-		notificationService.create({
-			userId,
-			module: 'PROFILE',
-			priority: 'INFO',
-			type: 'PROFILE_UPDATED',
-			title: 'Profile updated',
-			message: `Your profile has been updated. Current completion is ${completionInfo.percentage}%.`,
-			actionType: 'VIEW_PROFILE',
-			actionUrl: '/profile'
-		}).catch(e => console.error(e));
+		notificationService
+			.create({
+				userId,
+				module: "PROFILE",
+				priority: "INFO",
+				type: "PROFILE_UPDATED",
+				title: "Profile updated",
+				message: `Your profile has been updated. Current completion is ${completionInfo.percentage}%.`,
+				actionType: "VIEW_PROFILE",
+				actionUrl: "/profile",
+			})
+			.catch((e) => console.error(e));
 
 		if (completionInfo.percentage === 100) {
-			notificationService.create({
-				userId,
-				module: 'PROFILE',
-				priority: 'ACHIEVEMENT',
-				type: 'PROFILE_COMPLETE',
-				title: 'Profile 100% Complete',
-				message: 'Congratulations! You have successfully completed your profile.',
-				actionType: 'VIEW_PROFILE',
-				actionUrl: '/profile'
-			}).catch(e => console.error(e));
+			notificationService
+				.create({
+					userId,
+					module: "PROFILE",
+					priority: "ACHIEVEMENT",
+					type: "PROFILE_COMPLETE",
+					title: "Profile 100% Complete",
+					message: "Congratulations! You have successfully completed your profile.",
+					actionType: "VIEW_PROFILE",
+					actionUrl: "/profile",
+				})
+				.catch((e) => console.error(e));
 		}
 	} catch (error) {
 		console.error("Failed to update profile", error);

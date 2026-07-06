@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios from "axios";
 import { SkillNormalizer } from "../../../utils/normalizers";
 
 export interface LearningResource {
@@ -10,7 +10,7 @@ export interface LearningResource {
 	thumbnail?: string;
 	duration?: string;
 	description: string;
-    difficulty?: string;
+	difficulty?: string;
 }
 
 // In-memory cache for YouTube API results
@@ -26,25 +26,39 @@ export class LearningResourceService {
 	static normalizeTopic(topic: string): string {
 		// First pass it through the global skill normalizer to ensure standard aliases (e.g., NodeJS -> Node.js)
 		const standardSkill = SkillNormalizer.normalize(topic);
-		
-		const lower = standardSkill.toLowerCase();
-		if (lower.includes('react') || lower.includes('redux') || lower.includes('context api')) return 'React';
-		if (lower.includes('node') || lower.includes('express') || lower.includes('nestjs')) return 'Node.js';
-		if (lower.includes('mongo') || lower.includes('mongoose')) return 'MongoDB';
-		if (lower.includes('typescript') || lower.includes('ts')) return 'TypeScript';
-		if (lower.includes('javascript') || lower.includes('js') || lower.includes('es6')) return 'JavaScript';
-		if (lower.includes('python') || lower.includes('django') || lower.includes('flask') || lower.includes('fastapi')) return 'Python';
-		if (lower.includes('java ') || lower.includes('spring') || lower.includes('hibernate')) return 'Java';
-		if (lower.includes('sql') || lower.includes('postgres') || lower.includes('mysql')) return 'SQL';
-		if (lower.includes('docker') || lower.includes('kubernetes') || lower.includes('container')) return 'Docker';
-		if (lower.includes('aws') || lower.includes('cloud')) return 'AWS';
-		if (lower.includes('system design') || lower.includes('architecture')) return 'System Design';
-		if (lower.includes('html') || lower.includes('css') || lower.includes('tailwind')) return 'Frontend Fundamentals';
-        if (lower.includes('git') || lower.includes('github') || lower.includes('version control')) return 'Git';
-        if (lower.includes('c++') || lower.includes('cpp')) return 'C++';
-        if (lower.includes('c#') || lower.includes('.net')) return 'C#';
 
-        return standardSkill;
+		const lower = standardSkill.toLowerCase();
+		if (lower.includes("react") || lower.includes("redux") || lower.includes("context api"))
+			return "React";
+		if (lower.includes("node") || lower.includes("express") || lower.includes("nestjs"))
+			return "Node.js";
+		if (lower.includes("mongo") || lower.includes("mongoose")) return "MongoDB";
+		if (lower.includes("typescript") || lower.includes("ts")) return "TypeScript";
+		if (lower.includes("javascript") || lower.includes("js") || lower.includes("es6"))
+			return "JavaScript";
+		if (
+			lower.includes("python") ||
+			lower.includes("django") ||
+			lower.includes("flask") ||
+			lower.includes("fastapi")
+		)
+			return "Python";
+		if (lower.includes("java ") || lower.includes("spring") || lower.includes("hibernate"))
+			return "Java";
+		if (lower.includes("sql") || lower.includes("postgres") || lower.includes("mysql"))
+			return "SQL";
+		if (lower.includes("docker") || lower.includes("kubernetes") || lower.includes("container"))
+			return "Docker";
+		if (lower.includes("aws") || lower.includes("cloud")) return "AWS";
+		if (lower.includes("system design") || lower.includes("architecture")) return "System Design";
+		if (lower.includes("html") || lower.includes("css") || lower.includes("tailwind"))
+			return "Frontend Fundamentals";
+		if (lower.includes("git") || lower.includes("github") || lower.includes("version control"))
+			return "Git";
+		if (lower.includes("c++") || lower.includes("cpp")) return "C++";
+		if (lower.includes("c#") || lower.includes(".net")) return "C#";
+
+		return standardSkill;
 	}
 
 	/**
@@ -57,39 +71,42 @@ export class LearningResourceService {
 		// Universal mappings
 		resources.push({
 			title: `${normalizedTopic} Interactive Course`,
-			provider: 'freeCodeCamp',
-			type: 'Course',
+			provider: "freeCodeCamp",
+			type: "Course",
 			topic: normalizedTopic,
 			url: `https://www.freecodecamp.org/news/search/?query=${encodeURIComponent(normalizedTopic)}`,
 			description: `Free tutorials, courses, and practice for ${normalizedTopic}.`,
-            difficulty: 'Beginner'
+			difficulty: "Beginner",
 		});
 
 		// Specific Official Docs
 		const docsMap: Record<string, string> = {
-			'react': 'https://react.dev/learn',
-			'node.js': 'https://nodejs.org/en/docs/',
-			'typescript': 'https://www.typescriptlang.org/docs/',
-			'javascript': 'https://developer.mozilla.org/en-US/docs/Web/JavaScript',
-            'frontend fundamentals': 'https://developer.mozilla.org/en-US/',
-			'python': 'https://docs.python.org/3/',
-			'java': 'https://docs.oracle.com/en/java/',
-			'mongodb': 'https://www.mongodb.com/docs/',
-			'sql': 'https://www.w3schools.com/sql/',
-			'docker': 'https://docs.docker.com/',
-			'aws': 'https://docs.aws.amazon.com/',
-            'git': 'https://git-scm.com/doc',
+			react: "https://react.dev/learn",
+			"node.js": "https://nodejs.org/en/docs/",
+			typescript: "https://www.typescriptlang.org/docs/",
+			javascript: "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
+			"frontend fundamentals": "https://developer.mozilla.org/en-US/",
+			python: "https://docs.python.org/3/",
+			java: "https://docs.oracle.com/en/java/",
+			mongodb: "https://www.mongodb.com/docs/",
+			sql: "https://www.w3schools.com/sql/",
+			docker: "https://docs.docker.com/",
+			aws: "https://docs.aws.amazon.com/",
+			git: "https://git-scm.com/doc",
 		};
 
 		if (docsMap[lower]) {
 			resources.push({
 				title: `${normalizedTopic} Official Documentation`,
-				provider: lower === 'javascript' || lower === 'frontend fundamentals' ? 'MDN Web Docs' : 'Official Docs',
-				type: 'Official Docs',
+				provider:
+					lower === "javascript" || lower === "frontend fundamentals"
+						? "MDN Web Docs"
+						: "Official Docs",
+				type: "Official Docs",
 				topic: normalizedTopic,
 				url: docsMap[lower],
 				description: `The official, authoritative documentation for ${normalizedTopic}.`,
-                difficulty: 'Intermediate'
+				difficulty: "Intermediate",
 			});
 		}
 
@@ -102,13 +119,15 @@ export class LearningResourceService {
 	static async getYouTubeVideos(normalizedTopic: string): Promise<LearningResource[]> {
 		const apiKey = process.env.YOUTUBE_API_KEY;
 		if (!apiKey) {
-			console.warn('[LearningResourceService] YOUTUBE_API_KEY is not set. Skipping YouTube search.');
+			console.warn(
+				"[LearningResourceService] YOUTUBE_API_KEY is not set. Skipping YouTube search.",
+			);
 			return [];
 		}
 
 		// Check cache
 		const cached = youtubeCache.get(normalizedTopic);
-		if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
+		if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
 			console.log(`[LearningResourceService] Cache hit for YouTube: ${normalizedTopic}`);
 			return cached.data;
 		}
@@ -116,30 +135,30 @@ export class LearningResourceService {
 		try {
 			console.log(`[LearningResourceService] Fetching from YouTube API: ${normalizedTopic}`);
 			const query = `${normalizedTopic} full course tutorial`;
-			
+
 			// 1. Search for videos
-			const searchResponse = await axios.get('https://www.googleapis.com/youtube/v3/search', {
+			const searchResponse = await axios.get("https://www.googleapis.com/youtube/v3/search", {
 				params: {
-					part: 'snippet',
+					part: "snippet",
 					q: query,
-					type: 'video',
+					type: "video",
 					maxResults: 3,
-					order: 'relevance',
-					key: apiKey
-				}
+					order: "relevance",
+					key: apiKey,
+				},
 			});
 
 			const videos = searchResponse.data.items || [];
 			if (videos.length === 0) return [];
 
 			// 2. Fetch video details for duration (optional but good for UX)
-			const videoIds = videos.map((v: any) => v.id.videoId).join(',');
-			const detailsResponse = await axios.get('https://www.googleapis.com/youtube/v3/videos', {
+			const videoIds = videos.map((v: any) => v.id.videoId).join(",");
+			const detailsResponse = await axios.get("https://www.googleapis.com/youtube/v3/videos", {
 				params: {
-					part: 'contentDetails',
+					part: "contentDetails",
 					id: videoIds,
-					key: apiKey
-				}
+					key: apiKey,
+				},
 			});
 
 			const detailsMap = new Map();
@@ -149,28 +168,33 @@ export class LearningResourceService {
 
 			const results: LearningResource[] = videos.map((video: any) => {
 				// Parse ISO 8601 duration (e.g., PT1H30M)
-				let durationStr = 'Video';
+				let durationStr = "Video";
 				const rawDuration = detailsMap.get(video.id.videoId);
 				if (rawDuration) {
 					const match = rawDuration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
 					if (match) {
-						const h = parseInt(match[1] || '0');
-						const m = parseInt(match[2] || '0');
+						const h = parseInt(match[1] || "0");
+						const m = parseInt(match[2] || "0");
 						if (h > 0) durationStr = `${h}h ${m}m`;
 						else durationStr = `${m}m`;
 					}
 				}
 
 				return {
-					title: video.snippet.title.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&'),
+					title: video.snippet.title
+						.replace(/&quot;/g, '"')
+						.replace(/&#39;/g, "'")
+						.replace(/&amp;/g, "&"),
 					provider: video.snippet.channelTitle,
-					type: 'Video',
+					type: "Video",
 					topic: normalizedTopic,
 					url: `https://www.youtube.com/watch?v=${video.id.videoId}`,
-					thumbnail: video.snippet.thumbnails?.medium?.url || video.snippet.thumbnails?.default?.url,
+					thumbnail:
+						video.snippet.thumbnails?.medium?.url || video.snippet.thumbnails?.default?.url,
 					duration: durationStr,
-					description: video.snippet.description || `Video tutorial by ${video.snippet.channelTitle}`,
-                    difficulty: 'Beginner to Intermediate'
+					description:
+						video.snippet.description || `Video tutorial by ${video.snippet.channelTitle}`,
+					difficulty: "Beginner to Intermediate",
 				};
 			});
 
@@ -179,7 +203,10 @@ export class LearningResourceService {
 
 			return results;
 		} catch (error: any) {
-			console.error(`[LearningResourceService] YouTube API Error for ${normalizedTopic}:`, error.message);
+			console.error(
+				`[LearningResourceService] YouTube API Error for ${normalizedTopic}:`,
+				error.message,
+			);
 			return []; // Graceful fallback
 		}
 	}
@@ -189,18 +216,20 @@ export class LearningResourceService {
 	 */
 	static async getAggregatedResources(rawTopics: string[]): Promise<LearningResource[]> {
 		// 1. Normalize topics and remove duplicates
-		const normalizedTopics = Array.from(new Set(rawTopics.map(t => this.normalizeTopic(t))));
-		
+		const normalizedTopics = Array.from(
+			new Set(rawTopics.map((t) => LearningResourceService.normalizeTopic(t))),
+		);
+
 		const allResources: LearningResource[] = [];
 		const seenUrls = new Set<string>();
 
 		// 2. Fetch resources for each normalized topic
 		for (const topic of normalizedTopics) {
 			// Get static resources
-			const staticRes = this.getStaticResources(topic);
-			
+			const staticRes = LearningResourceService.getStaticResources(topic);
+
 			// Get YouTube videos
-			const ytRes = await this.getYouTubeVideos(topic);
+			const ytRes = await LearningResourceService.getYouTubeVideos(topic);
 
 			const combined = [...staticRes, ...ytRes];
 

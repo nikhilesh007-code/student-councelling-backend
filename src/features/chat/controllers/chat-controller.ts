@@ -51,7 +51,6 @@ Example Tone:
 User: "What is Java?"
 Assistant: "Java is a powerful, object-oriented programming language widely used in enterprise backend systems and Android app development... Since your target career is Data Scientist, Java is not a high priority right now. Instead, you should focus on your missing skills like Python and SQL first!"`;
 
-
 		const aiResponse = await aiService.generate(message, {
 			feature: "AI Chat",
 			systemPrompt,

@@ -70,16 +70,18 @@ export async function updatePhaseStatus(req: Request, res: Response) {
 		});
 
 		if (status === "COMPLETED") {
-			notificationService.create({
-				userId,
-				module: 'ROADMAP',
-				priority: 'ACHIEVEMENT',
-				type: 'PHASE_COMPLETED',
-				title: 'Roadmap Milestone Completed',
-				message: `Congratulations! You completed Phase ${parsedPhaseId + 1} of your ${career} roadmap.`,
-				actionType: 'VIEW_ROADMAP',
-				actionUrl: '/roadmap'
-			}).catch(e => console.error(e));
+			notificationService
+				.create({
+					userId,
+					module: "ROADMAP",
+					priority: "ACHIEVEMENT",
+					type: "PHASE_COMPLETED",
+					title: "Roadmap Milestone Completed",
+					message: `Congratulations! You completed Phase ${parsedPhaseId + 1} of your ${career} roadmap.`,
+					actionType: "VIEW_ROADMAP",
+					actionUrl: "/roadmap",
+				})
+				.catch((e) => console.error(e));
 		}
 
 		return res.status(200).json({ success: true, progress });

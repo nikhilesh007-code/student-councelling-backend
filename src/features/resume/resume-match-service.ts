@@ -1,7 +1,7 @@
 import { prisma } from "../../database";
+import { SkillNormalizer } from "../../utils/normalizers";
 import { aiService } from "../ai/ai-service";
 import { careerContextService } from "../career/career-context.service";
-import { SkillNormalizer } from "../../utils/normalizers";
 
 export class ResumeMatchService {
 	async analyzeMatch(userId: string) {
@@ -59,10 +59,10 @@ MUST use CANONICAL SKILL NAMES for all skills (e.g. "Node.js", "Express.js", "Ja
 			// Normalize AI outputs
 			aiResult.matchingSkills = SkillNormalizer.normalizeArray(aiResult.matchingSkills);
 			aiResult.missingSkills = SkillNormalizer.normalizeArray(aiResult.missingSkills);
-			
+
 			// Explicitly subtract profile skills from missing skills just in case
 			aiResult.missingSkills = aiResult.missingSkills.filter(
-				(skill: string) => !context.normalizedSkills.includes(skill)
+				(skill: string) => !context.normalizedSkills.includes(skill),
 			);
 
 			// Save back to DB

@@ -16,20 +16,30 @@ export class ProgressController {
 			// Return a safe fallback response so the frontend never crashes
 			res.status(200).json({
 				dbData: {
-					roadmapProgress: { completed: 0, total: 0, percentage: 0, currentPhaseTitle: "No data", currentStageRatio: "0/0" },
+					roadmapProgress: {
+						completed: 0,
+						total: 0,
+						percentage: 0,
+						currentPhaseTitle: "No data",
+						currentStageRatio: "0/0",
+					},
 					focusAreas: {
 						topStrength: "Not available",
 						criticalWeakness: "Not available",
-						nextSkill: "Not available"
+						nextSkill: "Not available",
 					},
 					nextLearningSteps: [],
 					readinessScore: 0,
 					learnedSkills: [],
-					missingSkills: []
+					missingSkills: [],
 				},
 				aiData: {
 					progressSummary: error.message || "Failed to load progress analysis.",
-					recommendations: ["Please ensure your profile is complete and a resume has been uploaded.", "Try setting your target career in the Career Guidance page.", "Complete more roadmap phases."]
+					recommendations: [
+						"Please ensure your profile is complete and a resume has been uploaded.",
+						"Try setting your target career in the Career Guidance page.",
+						"Complete more roadmap phases.",
+					],
 				},
 			});
 		}

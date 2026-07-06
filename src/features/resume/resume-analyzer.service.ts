@@ -21,7 +21,7 @@ export interface ResumeAnalysisResult {
 export class ResumeAnalyzerService {
 	async analyze(userId: string, parsedData: any, rawText: string): Promise<ResumeAnalysisResult> {
 		const context = await careerContextService.buildContext(userId);
-		
+
 		// 1. Fetch Career Requirements
 		let career = await prisma.career.findUnique({
 			where: { name: context.targetCareer },
@@ -42,7 +42,7 @@ export class ResumeAnalyzerService {
 
 		// 2. Normalize Resume Skills
 		// parsedData.skills could be an array of strings
-		let rawResumeSkills = Array.isArray(parsedData.skills) ? parsedData.skills : [];
+		const rawResumeSkills = Array.isArray(parsedData.skills) ? parsedData.skills : [];
 		if (parsedData.projects && Array.isArray(parsedData.projects)) {
 			parsedData.projects.forEach((p: any) => {
 				if (p.technologies && Array.isArray(p.technologies)) {
@@ -54,13 +54,13 @@ export class ResumeAnalyzerService {
 
 		// 3. Keyword Match (35%)
 		let keywordMatchScore = 0;
-		let missingSkills: string[] = requiredSkills.filter(s => !resumeSkills.includes(s));
+		const missingSkills: string[] = requiredSkills.filter((s) => !resumeSkills.includes(s));
 		if (requiredSkills.length > 0) {
-			const matched = requiredSkills.filter(s => resumeSkills.includes(s)).length;
+			const matched = requiredSkills.filter((s) => resumeSkills.includes(s)).length;
 			keywordMatchScore = Math.round((matched / requiredSkills.length) * 35);
 		} else {
 			// If no required skills found in DB, just give full points to not penalize
-			keywordMatchScore = 35; 
+			keywordMatchScore = 35;
 		}
 
 		// 4. Section Completeness (20%)
@@ -70,11 +70,11 @@ export class ResumeAnalyzerService {
 		if (parsedData.experience && parsedData.experience.length > 0) sectionCount++;
 		if (parsedData.projects && parsedData.projects.length > 0) sectionCount++;
 		if (resumeSkills.length > 0) sectionCount++;
-		
+
 		const sectionCompletenessScore = Math.round((sectionCount / 4) * 20);
 
 		// 5. Formatting & Presentation (15%)
-		let formattingChecks: string[] = [];
+		const formattingChecks: string[] = [];
 		let formattingPoints = 15;
 
 		if (rawText.length > 0) {
@@ -97,12 +97,12 @@ export class ResumeAnalyzerService {
 		formattingChecks.push("✔ Single column layout assumed");
 		formattingChecks.push("✔ No embedded images blocking text");
 		formattingChecks.push("✔ Readable fonts");
-		
+
 		if (!parsedData.projects || parsedData.projects.length === 0) {
-		    formattingChecks.push("✖ No Projects section");
+			formattingChecks.push("✖ No Projects section");
 		}
 		if (!parsedData.experience || parsedData.experience.length === 0) {
-		    formattingChecks.push("✖ No Experience section");
+			formattingChecks.push("✖ No Experience section");
 		}
 
 		const formattingScore = Math.max(0, formattingPoints);
@@ -129,8 +129,11 @@ export class ResumeAnalyzerService {
 
 		// 9. Contact Info (5%)
 		let contactScore = 0;
-		let hasEmail = parsedData.personal?.email || rawText.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
-		let hasPhone = parsedData.personal?.phone || rawText.match(/(\+\d{1,2}\s?)?1?\-?\.?\s?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/);
+		const hasEmail =
+			parsedData.personal?.email || rawText.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+		const hasPhone =
+			parsedData.personal?.phone ||
+			rawText.match(/(\+\d{1,2}\s?)?1?-?\.?\s?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/);
 		if (hasEmail && hasPhone) {
 			contactScore = 5;
 		} else if (hasEmail || hasPhone) {
@@ -138,7 +141,14 @@ export class ResumeAnalyzerService {
 		}
 
 		// Total Deterministic Score
-		const deterministicScore = keywordMatchScore + sectionCompletenessScore + formattingScore + projectsScore + experienceScore + educationScore + contactScore;
+		const deterministicScore =
+			keywordMatchScore +
+			sectionCompletenessScore +
+			formattingScore +
+			projectsScore +
+			experienceScore +
+			educationScore +
+			contactScore;
 
 		// 10. Fetch Career Gap (Previous Skill Gap Analysis)
 		let careerGapSkills: string[] = [];
@@ -151,7 +161,7 @@ export class ResumeAnalyzerService {
 					// Apply explicit subtraction just to be safe
 					const aiMissingSkills = SkillNormalizer.normalizeArray(gap.missingSkills);
 					careerGapSkills = aiMissingSkills.filter(
-						(skill: string) => !context.normalizedSkills.includes(skill)
+						(skill: string) => !context.normalizedSkills.includes(skill),
 					);
 				}
 			}

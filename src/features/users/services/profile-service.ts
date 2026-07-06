@@ -45,7 +45,7 @@ export interface ProfileCompletionResult {
 export async function calculateProfileCompletion(userId: string): Promise<ProfileCompletionResult> {
 	const profile = await prisma.studentProfile.findUnique({ where: { userId } });
 	const user = await prisma.user.findUnique({ where: { id: userId } });
-	
+
 	const missingFields: string[] = [];
 	const completedFields: string[] = [];
 
@@ -104,12 +104,13 @@ export async function calculateProfileCompletion(userId: string): Promise<Profil
 
 	// Core = 80%, Optional = 20%
 	const corePercentage = coreFields.length > 0 ? (coreCompletedCount / coreFields.length) * 80 : 0;
-	const optionalPercentage = optionalFields.length > 0 ? (optionalCompletedCount / optionalFields.length) * 20 : 0;
+	const optionalPercentage =
+		optionalFields.length > 0 ? (optionalCompletedCount / optionalFields.length) * 20 : 0;
 	const percentage = Math.round(corePercentage + optionalPercentage);
 
 	return {
 		percentage,
 		missingFields,
-		completedFields
+		completedFields,
 	};
 }

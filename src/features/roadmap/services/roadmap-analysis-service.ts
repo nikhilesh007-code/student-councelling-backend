@@ -1,9 +1,9 @@
 import { prisma } from "../../../database";
+import { SkillNormalizer } from "../../../utils/normalizers";
 import { aiService } from "../../ai/ai-service";
+import { careerContextService } from "../../career/career-context.service";
 import { careerResolver } from "../../career/career-resolver.service";
 import { getOrInitializeProfile } from "../../users/services/profile-service";
-import { careerContextService } from "../../career/career-context.service";
-import { SkillNormalizer } from "../../../utils/normalizers";
 
 export class RoadmapAnalysisService {
 	async analyzeRoadmap(userId: string) {
@@ -32,10 +32,14 @@ User Profile:
 - Branch: ${profile.branch || "Not specified"}
 - CGPA: ${profile.cgpa || "Not specified"}
 - Overall Career Goal: ${profile.careerGoal || "Not specified"}
-${resumeAnalysis?.parsedData && Object.keys(resumeAnalysis.parsedData).length > 0 ? `
+${
+	resumeAnalysis?.parsedData && Object.keys(resumeAnalysis.parsedData).length > 0
+		? `
 Additionally, use this extracted data from their uploaded resume to enrich the roadmap:
 Parsed Resume JSON:
-${JSON.stringify(resumeAnalysis.parsedData, null, 2)}` : ""}
+${JSON.stringify(resumeAnalysis.parsedData, null, 2)}`
+		: ""
+}
 
 Target Career: ${targetCareer}
 
@@ -107,9 +111,12 @@ Return purely JSON matching this exact structure:
 	private normalizeResponse(raw: any) {
 		const nextAction = {
 			title: raw.nextBestAction?.title || raw.nextAction?.title || "Start learning today",
-			reason: raw.nextBestAction?.description || raw.nextAction?.reason || "Begin the first phase of your roadmap.",
+			reason:
+				raw.nextBestAction?.description ||
+				raw.nextAction?.reason ||
+				"Begin the first phase of your roadmap.",
 			duration: raw.nextBestAction?.duration || raw.nextAction?.duration || "1 week",
-			priority: raw.nextBestAction?.priority || raw.nextAction?.priority || "High"
+			priority: raw.nextBestAction?.priority || raw.nextAction?.priority || "High",
 		};
 
 		return {
@@ -118,32 +125,34 @@ Return purely JSON matching this exact structure:
 			milestonePrediction: raw.milestonePrediction || {
 				internshipReady: "After core skills",
 				placementReady: raw.estimatedDuration || "After roadmap completion",
-				confidence: 85
+				confidence: 85,
 			},
-			suggestedProjects: raw.suggestedProjects || (raw.phases || []).flatMap((p: any) => 
-				(p.projects || []).map((proj: string) => ({
-					title: proj,
-					difficulty: "Intermediate",
-					reason: `Hands-on project for ${p.title || 'this phase'}.`,
-					skills: p.skills || []
-				}))
-			)
+			suggestedProjects:
+				raw.suggestedProjects ||
+				(raw.phases || []).flatMap((p: any) =>
+					(p.projects || []).map((proj: string) => ({
+						title: proj,
+						difficulty: "Intermediate",
+						reason: `Hands-on project for ${p.title || "this phase"}.`,
+						skills: p.skills || [],
+					})),
+				),
 		};
 	}
 
 	async getRoadmap(userId: string) {
 		const rawRoadmap = await this.analyzeRoadmap(userId);
-		
+
 		// Fetch career context to determine dynamic progress
 		const context = await careerContextService.buildContext(userId);
 		const normalizedSkills = context.normalizedSkills || [];
 		const normalizedSkillSet = new Set(normalizedSkills);
-		
+
 		const phases = rawRoadmap.phases || [];
 		const totalPhases = phases.length;
-		
+
 		let furthestPhaseIndex = -1;
-		let completedSkills: string[] = [];
+		const completedSkills: string[] = [];
 		let remainingSkills: string[] = [];
 
 		for (let i = 0; i < phases.length; i++) {
@@ -160,7 +169,7 @@ Return purely JSON matching this exact structure:
 		let nextPhase = "Phase 1";
 		let nextSkill = "Not yet identified";
 		let overallProgress = 0;
-		
+
 		if (furthestPhaseIndex === -1) {
 			completedPhases = 0;
 			if (phases.length > 0) {
@@ -168,23 +177,35 @@ Return purely JSON matching this exact structure:
 				nextPhase = phases.length > 1 ? phases[1].title : "Completion";
 				const p0Skills = SkillNormalizer.normalizeArray(phases[0].skills || []);
 				nextSkill = p0Skills[0] || nextSkill;
-				remainingSkills = phases.flatMap((p: any) => SkillNormalizer.normalizeArray(p.skills || []));
+				remainingSkills = phases.flatMap((p: any) =>
+					SkillNormalizer.normalizeArray(p.skills || []),
+				);
 			}
 		} else {
-			const furthestPhaseSkills = SkillNormalizer.normalizeArray(phases[furthestPhaseIndex].skills || []);
-			const allFurthestComplete = furthestPhaseSkills.every((s: string) => normalizedSkillSet.has(s));
-			
+			const furthestPhaseSkills = SkillNormalizer.normalizeArray(
+				phases[furthestPhaseIndex].skills || [],
+			);
+			const allFurthestComplete = furthestPhaseSkills.every((s: string) =>
+				normalizedSkillSet.has(s),
+			);
+
 			console.log("=== DEBUG MATCHING ===");
 			console.log("Normalized profile skills:", Array.from(normalizedSkillSet));
 			console.log(`Normalized roadmap phase ${furthestPhaseIndex} skills:`, furthestPhaseSkills);
-			console.log("Matched:", furthestPhaseSkills.filter((s: string) => normalizedSkillSet.has(s)));
-			
+			console.log(
+				"Matched:",
+				furthestPhaseSkills.filter((s: string) => normalizedSkillSet.has(s)),
+			);
+
 			if (allFurthestComplete) {
 				completedPhases = furthestPhaseIndex + 1;
 				if (completedPhases < totalPhases) {
 					currentPhase = phases[completedPhases].title;
-					nextPhase = phases.length > completedPhases + 1 ? phases[completedPhases + 1].title : "Completion";
-					const nextPhaseSkills = SkillNormalizer.normalizeArray(phases[completedPhases].skills || []);
+					nextPhase =
+						phases.length > completedPhases + 1 ? phases[completedPhases + 1].title : "Completion";
+					const nextPhaseSkills = SkillNormalizer.normalizeArray(
+						phases[completedPhases].skills || [],
+					);
 					nextSkill = nextPhaseSkills[0] || nextSkill;
 				} else {
 					currentPhase = "All phases complete";
@@ -194,7 +215,10 @@ Return purely JSON matching this exact structure:
 			} else {
 				completedPhases = furthestPhaseIndex;
 				currentPhase = phases[furthestPhaseIndex].title;
-				nextPhase = phases.length > furthestPhaseIndex + 1 ? phases[furthestPhaseIndex + 1].title : "Completion";
+				nextPhase =
+					phases.length > furthestPhaseIndex + 1
+						? phases[furthestPhaseIndex + 1].title
+						: "Completion";
 				const missing = furthestPhaseSkills.find((s: string) => !normalizedSkillSet.has(s));
 				if (missing) {
 					nextSkill = missing;
@@ -232,8 +256,8 @@ Return purely JSON matching this exact structure:
 				nextSkill,
 				completedSkills,
 				remainingSkills,
-				estimatedCompletion: rawRoadmap.estimatedDuration || "Unknown"
-			}
+				estimatedCompletion: rawRoadmap.estimatedDuration || "Unknown",
+			},
 		};
 	}
 }

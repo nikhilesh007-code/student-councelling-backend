@@ -19,11 +19,32 @@ export interface AIHealthStatus {
 
 const status: AIHealthStatus = {
 	providers: {
-		groq: { available: true, errorCount: 0, rateLimitCount: 0, lastSuccess: null, avgLatencyMs: 0, latencySamples: [] },
-		gemini: { available: true, errorCount: 0, rateLimitCount: 0, lastSuccess: null, avgLatencyMs: 0, latencySamples: [] },
-		ollama: { available: true, errorCount: 0, rateLimitCount: 0, lastSuccess: null, avgLatencyMs: 0, latencySamples: [] },
+		groq: {
+			available: true,
+			errorCount: 0,
+			rateLimitCount: 0,
+			lastSuccess: null,
+			avgLatencyMs: 0,
+			latencySamples: [],
+		},
+		gemini: {
+			available: true,
+			errorCount: 0,
+			rateLimitCount: 0,
+			lastSuccess: null,
+			avgLatencyMs: 0,
+			latencySamples: [],
+		},
+		ollama: {
+			available: true,
+			errorCount: 0,
+			rateLimitCount: 0,
+			lastSuccess: null,
+			avgLatencyMs: 0,
+			latencySamples: [],
+		},
 	},
-	currentProvider: 'groq',
+	currentProvider: "groq",
 	lastSuccessfulProvider: null,
 };
 
@@ -32,12 +53,12 @@ export const aiHealthManager = {
 		return status;
 	},
 
-	recordSuccess(provider: 'groq' | 'gemini' | 'ollama', latencyMs: number) {
+	recordSuccess(provider: "groq" | "gemini" | "ollama", latencyMs: number) {
 		const p = status.providers[provider];
 		p.available = true;
 		p.errorCount = 0;
 		p.lastSuccess = new Date();
-		
+
 		p.latencySamples.push(latencyMs);
 		if (p.latencySamples.length > 20) p.latencySamples.shift();
 		p.avgLatencyMs = p.latencySamples.reduce((a, b) => a + b, 0) / p.latencySamples.length;
@@ -46,7 +67,7 @@ export const aiHealthManager = {
 		status.lastSuccessfulProvider = provider;
 	},
 
-	recordError(provider: 'groq' | 'gemini' | 'ollama', isRateLimit: boolean) {
+	recordError(provider: "groq" | "gemini" | "ollama", isRateLimit: boolean) {
 		const p = status.providers[provider];
 		if (isRateLimit) {
 			p.rateLimitCount++;
@@ -59,10 +80,10 @@ export const aiHealthManager = {
 		}
 	},
 
-	resetProvider(provider: 'groq' | 'gemini' | 'ollama') {
+	resetProvider(provider: "groq" | "gemini" | "ollama") {
 		const p = status.providers[provider];
 		p.available = true;
 		p.errorCount = 0;
 		p.rateLimitCount = 0;
-	}
+	},
 };

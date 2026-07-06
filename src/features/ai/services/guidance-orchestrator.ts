@@ -10,7 +10,11 @@ import {
 /**
  * Builds the comprehensive guidance prompt from a student profile.
  */
-function buildGuidancePrompt(profile: StudentProfileParams, parsedResume?: any, normalizedSkills?: string[]): string {
+function buildGuidancePrompt(
+	profile: StudentProfileParams,
+	parsedResume?: any,
+	normalizedSkills?: string[],
+): string {
 	const isProfessional = profile.userType === "Working Professional";
 	const profileDetails = isProfessional
 		? `- Current Job Title: ${profile.currentJobTitle || "Not specified"}
@@ -35,7 +39,7 @@ User Profile:
 - User Type: ${profile.userType || "Student"}
 - Selected Target Career: ${profile.selectedCareer || "Not specified (infer from profile)"}
 - Experience Level: ${profile.experienceLevel || "Not specified"}
-- Skills: ${normalizedSkills ? normalizedSkills.join(", ") : (profile.skills.length > 0 ? profile.skills.join(", ") : "None specified")}
+- Skills: ${normalizedSkills ? normalizedSkills.join(", ") : profile.skills.length > 0 ? profile.skills.join(", ") : "None specified"}
 - Interests: ${profile.interests.length > 0 ? profile.interests.join(", ") : "None specified"}
 - Preferred Domains: ${profile.preferredDomains && profile.preferredDomains.length > 0 ? profile.preferredDomains.join(", ") : "None specified"}
 ${profileDetails}
@@ -217,7 +221,6 @@ export async function getOrchestratedGuidance(
 				return cachedRes;
 			}
 		}
-
 	}
 
 	// No cache exists at all

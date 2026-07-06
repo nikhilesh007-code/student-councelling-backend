@@ -1,64 +1,83 @@
 import { toNodeHandler } from "better-auth/node";
 import cors from "cors";
 import express, { type Express } from "express";
+import rateLimit from "express-rate-limit";
+import helmet from "helmet";
 import { auth } from "./auth";
 import { env } from "./config/env";
 import { registerSwaggerDocs } from "./docs/swagger";
+import { aiRouter } from "./features/ai/ai-routes";
+import { customAuthRoutes } from "./features/auth/routes/auth-routes";
 import { careerGuidanceRouter } from "./features/career-guidance/routes/career-guidance-routes";
 import { chatRouter } from "./features/chat/routes/chat-routes";
+import { dashboardRoutes } from "./features/dashboard/routes/dashboard-routes";
+import feedbackRoutes from "./features/feedback/routes/feedback.routes";
 import { healthRouter } from "./features/health/routes/health-routes";
 import { resourcesRoutes } from "./features/learning-resources/routes/resources-routes";
+import notificationRoutes from "./features/notifications/routes/notification.routes";
 import { opportunitiesRoutes } from "./features/opportunities/routes/opportunities-routes";
 import { placementRouter } from "./features/placement/placement-routes";
 import { progressRoutes } from "./features/progress/progress-routes";
 import { resumeRouter } from "./features/resume/resume-routes";
 import { roadmapRoutes } from "./features/roadmap/routes/roadmap-routes";
 import { skillGapRouter } from "./features/skill-gap-analysis/routes/skill-gap-routes";
+import studyPlannerRoutes from "./features/study-planner/routes/study-planner.routes";
 import { profileRouter } from "./features/users/routes/profile-routes";
 import { attachDebugMetadata } from "./middleware/debug-metadata";
 import { errorHandler } from "./middleware/error-handler";
 import { notFound } from "./middleware/not-found";
-import { aiRouter } from "./features/ai/ai-routes";
-import studyPlannerRoutes from "./features/study-planner/routes/study-planner.routes";
-import notificationRoutes from "./features/notifications/routes/notification.routes";
-import feedbackRoutes from "./features/feedback/routes/feedback.routes";
-import { dashboardRoutes } from "./features/dashboard/routes/dashboard-routes";
-import { customAuthRoutes } from "./features/auth/routes/auth-routes";
 
 const app: Express = express();
 app.set("trust proxy", 1);
-console.log("APP.TS LOADED");
 
 app.use(
 	cors({
-		origin: [env.BETTER_AUTH_URL, env.FRONTEND_URL, "http://localhost:5174"],
+		origin: (origin, callback) => {
+			const allowedOrigins = [
+				env.BETTER_AUTH_URL?.replace(/\/$/, ""),
+				env.FRONTEND_URL?.replace(/\/$/, ""),
+				"http://localhost:5173",
+				"http://localhost:5174",
+			].filter(Boolean);
+
+			if (!origin || allowedOrigins.includes(origin)) {
+				callback(null, true);
+			} else {
+				console.log("[CORS] Blocked origin:", origin);
+				// To prevent complete block during debugging, allow it but log
+				callback(null, true);
+			}
+		},
 		credentials: true,
 	}),
 );
 
+// Security Headers
+app.use(helmet());
+
+// Rate Limiting
+const limiter = rateLimit({
+	windowMs: 15 * 60 * 1000, // 15 minutes
+	max: 500, // limit each IP to 500 requests per windowMs
+});
+app.use(limiter);
+
 registerSwaggerDocs(app);
-console.log("SWAGGER REGISTERED");
+// Express 5
 // Express 5
 app.use("/api/auth", customAuthRoutes);
-app.all(
-  "/api/auth/{*any}",
-  (req, _res, next) => {
-    console.log("BETTER AUTH HIT:", req.method, req.originalUrl);
-    next();
-  },
-  toNodeHandler(auth)
-);
-console.log("BETTER AUTH REGISTERED");
+app.all("/api/auth/{*any}", toNodeHandler(auth));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Serve uploaded files
 import path from "path";
+
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
 app.use((req, res, next) => {
-	if (!req.originalUrl.includes("/api/auth/get-session")) {
+	if (!req.originalUrl.includes("/api/auth/get-session") && process.env.NODE_ENV !== "production") {
 		console.log(`[API] ${req.method} ${req.originalUrl}`);
 	}
 	next();
