@@ -8,12 +8,18 @@ async function bootstrap() {
 	try {
 		await prisma.$connect();
 		console.log("[DB] PostgreSQL connected successfully");
-		
-		await initOllama();
+
+		// Don't let Ollama failure stop the server
+		try {
+			await initOllama();
+		} catch (err) {
+			console.warn("[OLLAMA] Skipping Ollama initialization:", err);
+		}
+
 		initReminderScheduler();
 
 		app.listen(env.PORT, () => {
-			console.log(`[SERVER] Backend listening on http://localhost:${env.PORT}`);
+			console.log(`[SERVER] Backend listening on port ${env.PORT}`);
 		});
 	} catch (error) {
 		console.error("Failed to start server:", error);
