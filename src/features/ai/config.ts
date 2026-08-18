@@ -9,7 +9,7 @@ export interface AIConfig {
 	model: string;
 }
 
-export const AI_MODEL = "llama-3.1-8b-instant";
+export const AI_MODEL = "openai/gpt-oss-20b";
 
 let _config: AIConfig | null = null;
 
